@@ -1,10 +1,20 @@
-import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, BadRequestException } from '@nestjs/common';
 import { CodeExecutionService } from './code-execution.service';
 import { ExecuteCodeDto } from './dto/execute-code.dto';
+
+const LANGUAGES = [
+  { id: 'javascript', name: 'JavaScript', version: 'node' },
+  { id: 'python', name: 'Python', version: 'python3' },
+];
 
 @Controller('execute')
 export class CodeExecutionController {
   constructor(private readonly codeExecutionService: CodeExecutionService) {}
+
+  @Get('languages')
+  getLanguages() {
+    return LANGUAGES;
+  }
 
   @Post()
   async run(@Body() dto: ExecuteCodeDto) {
