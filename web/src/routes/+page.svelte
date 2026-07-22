@@ -1,11 +1,13 @@
 <script lang="ts">
+	import CodeEditor from '$lib/components/CodeEditor.svelte';
+
 	const API = '/execute';
 
 	type Language = { id: string; name: string; version: string };
 
 	let languages = $state<Language[]>([]);
 	let selectedLang = $state('javascript');
-	let code = $state('');
+	let code = $state('console.log("Hello, World!");');
 	let output = $state('');
 	let running = $state(false);
 	let outputTab = $state<'stdout' | 'stderr'>('stdout');
@@ -56,13 +58,6 @@
 			running = false;
 		}
 	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-			e.preventDefault();
-			runCode();
-		}
-	}
 </script>
 
 <svelte:head>
@@ -100,12 +95,7 @@
 				<span class="panel-title">Editor</span>
 				<span class="shortcut">Ctrl+Enter to run</span>
 			</div>
-			<textarea
-				bind:value={code}
-				onkeydown={handleKeydown}
-				spellcheck="false"
-				placeholder="Write your code here..."
-			></textarea>
+			<CodeEditor bind:code language={selectedLang} onRun={runCode} />
 		</div>
 
 		<div class="panel output-panel">
@@ -274,24 +264,6 @@
 
 	.shortcut {
 		font-size: 0.75rem;
-		color: #484f58;
-	}
-
-	textarea {
-		flex: 1;
-		padding: 16px;
-		background: #0d1117;
-		color: #c9d1d9;
-		border: none;
-		outline: none;
-		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-		font-size: 0.9rem;
-		line-height: 1.6;
-		resize: none;
-		tab-size: 2;
-	}
-
-	textarea::placeholder {
 		color: #484f58;
 	}
 
