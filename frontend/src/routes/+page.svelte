@@ -23,7 +23,6 @@
 	let showLineNumbers = $state(true);
 	let streamingEdits = $state(true);
 	let settingsOpen = $state(false);
-	let editorTheme = $state<'default' | 'monokai' | 'vscode' | 'github' | 'gruvbox'>('default');
 
 	// Derived from general settings store
 	let autoScrollStreaming = $derived($generalSettings.autoScrollStreaming);
@@ -190,7 +189,7 @@ func main() {
 	<title>SwafCode</title>
 </svelte:head>
 
-<div class="app" class:light={editorTheme !== 'default'}>
+<div class="app">
 	<header>
 		<h1>Swaf<span>Code</span></h1>
 		<div class="header-controls">
@@ -284,7 +283,7 @@ func main() {
 				<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="10"></textarea>
 			</div>
 			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
-				<AiChat bind:code language={selectedLang} theme="dark" getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} autoScroll={autoScrollStreaming} />
+				<AiChat bind:code language={selectedLang} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} autoScroll={autoScrollStreaming} />
 			</div>
 		</div>
 	</main>
@@ -297,83 +296,9 @@ func main() {
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
-		background: #0d1117;
-		color: #c9d1d9;
+		background: var(--bg-primary);
+		color: var(--text-primary);
 		transition: background 0.2s, color 0.2s;
-	}
-
-	.app.light {
-		background: #ffffff;
-		color: #24292f;
-	}
-
-	.app.light header {
-		background: #f6f8fa;
-		border-bottom: 1px solid #d0d7de;
-	}
-
-	.app.light .lang-tabs {
-		background: #ffffff;
-		border: 1px solid #d0d7de;
-	}
-
-	.app.light .lang-tab {
-		color: #656d76;
-	}
-
-	.app.light .lang-tab:hover {
-		color: #24292f;
-		background: #f3f4f6;
-	}
-
-	.app.light .lang-tab.active {
-		background: #eaeef2;
-		color: #24292f;
-	}
-
-	.app.light .panel-header {
-		background: #f6f8fa;
-		border-bottom: 1px solid #d0d7de;
-	}
-
-	.app.light .panel-title {
-		color: #656d76;
-	}
-
-	.app.light .tab {
-		color: #656d76;
-	}
-
-	.app.light .tab:hover {
-		color: #24292f;
-	}
-
-	.app.light .tab.active {
-		background: #eaeef2;
-		color: #24292f;
-	}
-
-	.app.light .output-content {
-		background: #f6f8fa;
-		color: #24292f;
-	}
-
-	.app.light .icon-btn {
-		background: #f3f4f6;
-		color: #24292f;
-		border: 1px solid #d0d7de;
-	}
-
-	.app.light .icon-btn:hover {
-		background: #eaeef2;
-	}
-
-	.app.light .icon-btn.secondary {
-		background: #f3f4f6;
-	}
-
-	.app.light .checkbox-label {
-		color: #24292f;
 	}
 
 	/* Header */
@@ -382,18 +307,18 @@ func main() {
 		align-items: center;
 		justify-content: space-between;
 		padding: 12px 20px;
-		background: #161b22;
-		border-bottom: 1px solid #30363d;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border-primary);
 	}
 
 	h1 {
 		font-size: 1.3rem;
 		font-weight: 700;
-		color: #f0f6fc;
+		color: var(--text-bright);
 	}
 
 	h1 span {
-		color: #58a6ff;
+		color: var(--accent-primary);
 	}
 
 	.header-controls {
@@ -405,8 +330,8 @@ func main() {
 	.lang-tabs {
 		display: flex;
 		gap: 4px;
-		background: #0d1117;
-		border: 1px solid #30363d;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-primary);
 		border-radius: 8px;
 		padding: 3px;
 	}
@@ -416,7 +341,7 @@ func main() {
 		border: none;
 		border-radius: 6px;
 		background: transparent;
-		color: #8b949e;
+		color: var(--text-secondary);
 		font-size: 0.85rem;
 		font-weight: 500;
 		cursor: pointer;
@@ -424,13 +349,13 @@ func main() {
 	}
 
 	.lang-tab:hover {
-		color: #c9d1d9;
-		background: #1c2128;
+		color: var(--text-primary);
+		background: var(--bg-hover);
 	}
 
 	.lang-tab.active {
-		background: #21262d;
-		color: #f0f6fc;
+		background: var(--bg-tertiary);
+		color: var(--text-bright);
 	}
 
 	.header-actions {
@@ -447,19 +372,19 @@ func main() {
 		height: 32px;
 		border: none;
 		border-radius: 6px;
-		background: #21262d;
-		color: #c9d1d9;
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
 		font-size: 0.85rem;
 		cursor: pointer;
 		transition: all 0.15s;
 	}
 
 	.icon-btn:hover {
-		background: #30363d;
+		background: var(--bg-hover);
 	}
 
 	.icon-btn.secondary {
-		background: #21262d;
+		background: var(--bg-tertiary);
 		font-size: 0.8rem;
 		padding: 0 8px;
 		width: auto;
@@ -472,8 +397,8 @@ func main() {
 		padding: 8px 20px;
 		border: none;
 		border-radius: 8px;
-		background: #238636;
-		color: #fff;
+		background: var(--accent-success);
+		color: var(--text-inverse);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -481,7 +406,7 @@ func main() {
 	}
 
 	.run-btn:hover:not(:disabled) {
-		background: #2ea043;
+		background: var(--accent-success-hover);
 	}
 
 	.run-btn:disabled {
@@ -519,7 +444,7 @@ func main() {
 	}
 
 	.editor-panel {
-		border-right: 1px solid #30363d;
+		border-right: 1px solid var(--border-primary);
 	}
 
 	.panel-header {
@@ -527,8 +452,8 @@ func main() {
 		align-items: center;
 		justify-content: space-between;
 		padding: 8px 16px;
-		background: #161b22;
-		border-bottom: 1px solid #30363d;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border-primary);
 		min-height: 40px;
 	}
 
@@ -544,19 +469,23 @@ func main() {
 		align-items: center;
 		gap: 6px;
 		font-size: 0.8rem;
-		color: #8b949e;
+		color: var(--text-secondary);
 		cursor: pointer;
+	}
+
+	.checkbox-label input {
+		accent-color: var(--accent-success);
 	}
 
 	.panel-title {
 		font-size: 0.8rem;
 		font-weight: 600;
-		color: #8b949e;
+		color: var(--text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-}
+	}
 
-/* Output panel */
+	/* Output panel */
 	.output-tabs {
 		display: flex;
 		gap: 4px;
@@ -567,7 +496,7 @@ func main() {
 		border: none;
 		border-radius: 6px;
 		background: transparent;
-		color: #8b949e;
+		color: var(--text-secondary);
 		font-size: 0.8rem;
 		font-weight: 500;
 		cursor: pointer;
@@ -576,12 +505,12 @@ func main() {
 	}
 
 	.tab:hover {
-		color: #c9d1d9;
+		color: var(--text-primary);
 	}
 
 	.tab.active {
-		background: #21262d;
-		color: #f0f6fc;
+		background: var(--bg-tertiary);
+		color: var(--text-bright);
 	}
 
 	.badge {
@@ -590,15 +519,15 @@ func main() {
 		right: 4px;
 		width: 7px;
 		height: 7px;
-		background: #f85149;
+		background: var(--accent-error);
 		border-radius: 50%;
 	}
 
 	.output-content {
 		flex: 1;
 		padding: 16px;
-		background: #0d1117;
-		color: #c9d1d9;
+		background: var(--bg-primary);
+		color: var(--text-primary);
 		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 		font-size: 0.85rem;
 		line-height: 1.6;
@@ -626,10 +555,10 @@ func main() {
 	.stdin-wrapper textarea {
 		flex: 1;
 		resize: none;
-		background: #0d1117;
-		border: 1px solid #30363d;
+		background: var(--bg-input);
+		border: 1px solid var(--border-primary);
 		border-radius: 8px;
-		color: #f0f6fc;
+		color: var(--text-primary);
 		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 		font-size: 0.85rem;
 		line-height: 1.6;
@@ -638,13 +567,7 @@ func main() {
 	}
 
 	.stdin-wrapper textarea:focus {
-		border-color: #58a6ff;
-	}
-
-	.app.light .stdin-wrapper textarea {
-		background: #ffffff;
-		border: 1px solid #d0d7de;
-		color: #24292f;
+		border-color: var(--border-focus);
 	}
 
 	.hidden {

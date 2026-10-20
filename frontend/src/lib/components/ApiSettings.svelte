@@ -67,7 +67,7 @@
 					</label>
 				{:else}
 					<label class="field">
-						<span class="field-label">Editor Theme</span>
+						<span class="field-label">Theme</span>
 						<select bind:value={generalConfig.theme}>
 							{#each themeList as t}
 								<option value={t.id}>{t.name}</option>

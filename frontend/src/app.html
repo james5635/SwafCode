@@ -4,6 +4,14 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script>
+			// Apply saved theme before first paint to avoid a flash
+			try {
+				const saved = JSON.parse(localStorage.getItem('swafcode:general-settings') || '{}');
+				const id = saved.theme || 'default';
+				document.documentElement.dataset.theme = id;
+			} catch (e) {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

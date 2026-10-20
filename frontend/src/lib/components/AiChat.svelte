@@ -21,7 +21,6 @@
 	let {
 		code = $bindable(''),
 		language = 'typescript',
-		theme = 'dark',
 		getOutput = () => '',
 		runCode = async () => '',
 		embedded = false,
@@ -30,7 +29,6 @@
 	}: {
 		code: string;
 		language: string;
-		theme?: 'dark' | 'light';
 		getOutput?: () => string;
 		runCode?: () => Promise<string>;
 		embedded?: boolean;
@@ -336,7 +334,7 @@
 	}
 </script>
 
-<div class="chat-panel" class:light={theme === 'light'} class:embedded>
+<div class="chat-panel" class:embedded>
 	<div class="chat-header">
 		{#if !embedded}
 			<span class="panel-title">AI Agent</span>
@@ -408,8 +406,8 @@
 		flex-direction: column;
 		width: 380px;
 		min-width: 280px;
-		border-left: 1px solid #30363d;
-		background: #0d1117;
+		border-left: 1px solid var(--border-primary);
+		background: var(--bg-primary);
 		min-height: 0;
 	}
 
@@ -428,30 +426,20 @@
 		padding: 8px 0 0 0;
 	}
 
-	.chat-panel.light {
-		background: #ffffff;
-		border-left: 1px solid #d0d7de;
-	}
-
 	.chat-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: 8px 16px;
-		background: #161b22;
-		border-bottom: 1px solid #30363d;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--bg-hover);
 		min-height: 40px;
-	}
-
-	.chat-panel.light .chat-header {
-		background: #f6f8fa;
-		border-bottom: 1px solid #d0d7de;
 	}
 
 	.panel-title {
 		font-size: 0.8rem;
 		font-weight: 600;
-		color: #8b949e;
+		color: var(--text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
@@ -459,13 +447,13 @@
 	.icon-btn {
 		background: none;
 		border: none;
-		color: #8b949e;
+		color: var(--text-secondary);
 		cursor: pointer;
 		font-size: 0.85rem;
 	}
 
 	.icon-btn:hover {
-		color: #f0f6fc;
+		color: var(--text-bright);
 	}
 
 	.messages {
@@ -481,12 +469,12 @@
 	.empty {
 		margin: auto;
 		text-align: center;
-		color: #8b949e;
+		color: var(--text-secondary);
 		font-size: 0.85rem;
 	}
 
 	.empty .muted {
-		color: #484f58;
+		color: var(--text-muted);
 		font-size: 0.75rem;
 		margin-top: 4px;
 	}
@@ -505,22 +493,16 @@
 	}
 
 	.bubble.user {
-		background: #1f6feb;
+		background: var(--accent-primary);
 		color: #fff;
 		margin-left: auto;
 		border-bottom-right-radius: 2px;
 	}
 
 	.bubble.assistant {
-		background: #21262d;
-		color: #c9d1d9;
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
 		border-bottom-left-radius: 2px;
-	}
-
-	.chat-panel.light .bubble.assistant {
-		background: #f6f8fa;
-		color: #24292f;
-		border: 1px solid #d0d7de;
 	}
 
 	.bubble :global(.md p) {
@@ -532,7 +514,7 @@
 	}
 
 	.bubble :global(.md code) {
-		background: rgba(110, 118, 129, 0.3);
+		background: var(--bg-tertiary);
 		padding: 1px 4px;
 		border-radius: 4px;
 		font-family: 'SF Mono', 'Fira Code', monospace;
@@ -540,7 +522,7 @@
 	}
 
 	.bubble :global(.md pre) {
-		background: #0d1117;
+		background: var(--bg-primary);
 		padding: 8px 10px;
 		border-radius: 6px;
 		overflow-x: auto;
@@ -561,7 +543,7 @@
 	.dot {
 		width: 6px;
 		height: 6px;
-		background: #8b949e;
+		background: var(--text-secondary);
 		border-radius: 50%;
 		animation: blink 1.2s infinite;
 	}
@@ -583,22 +565,17 @@
 		display: flex;
 		gap: 8px;
 		padding: 10px 12px;
-		border-top: 1px solid #30363d;
-		background: #161b22;
-	}
-
-	.chat-panel.light .input-row {
-		background: #f6f8fa;
-		border-top: 1px solid #d0d7de;
+		border-top: 1px solid var(--bg-hover);
+		background: var(--bg-secondary);
 	}
 
 	.input-row textarea {
 		flex: 1;
 		resize: none;
-		background: #0d1117;
-		border: 1px solid #30363d;
+		background: var(--bg-primary);
+		border: 1px solid var(--bg-hover);
 		border-radius: 8px;
-		color: #f0f6fc;
+		color: var(--text-bright);
 		font-family: inherit;
 		font-size: 0.85rem;
 		padding: 8px 10px;
@@ -606,17 +583,11 @@
 	}
 
 	.input-row textarea:focus {
-		border-color: #58a6ff;
-	}
-
-	.chat-panel.light .input-row textarea {
-		background: #ffffff;
-		border: 1px solid #d0d7de;
-		color: #24292f;
+		border-color: var(--accent-primary);
 	}
 
 	.send-btn {
-		background: #238636;
+		background: var(--accent-success);
 		color: #fff;
 		border: none;
 		border-radius: 8px;
@@ -632,11 +603,11 @@
 	}
 
 	.send-btn:hover:not(:disabled) {
-		background: #2ea043;
+		background: var(--accent-success-hover);
 	}
 
 	.stop-btn {
-		background: #da3633;
+		background: var(--accent-error);
 		color: #fff;
 		border: none;
 		border-radius: 8px;
@@ -647,31 +618,25 @@
 	}
 
 	.stop-btn:hover {
-		background: #f85149;
+		background: var(--accent-error-hover);
 	}
 
 	.bubble.streaming {
-		border: 1px solid #1f6feb;
+		border: 1px solid var(--accent-primary);
 	}
 
 	.bubble.tool {
-		background: #161b22;
-		border: 1px solid #30363d;
-		color: #8b949e;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-primary);
+		color: var(--text-secondary);
 		max-width: 100%;
 		font-family: 'SF Mono', 'Fira Code', monospace;
 		font-size: 0.78rem;
 	}
 
-	.chat-panel.light .bubble.tool {
-		background: #f6f8fa;
-		border: 1px solid #d0d7de;
-		color: #656d76;
-	}
-
 	.bubble.tool .tool-name {
 		display: block;
-		color: #79c0ff;
+		color: var(--accent-primary);
 		font-weight: 600;
 		margin-bottom: 4px;
 	}

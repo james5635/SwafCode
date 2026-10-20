@@ -14,9 +14,10 @@
 	import { githubDark } from '@fsegurai/codemirror-theme-github-dark';
 	import { gruvboxDark } from '@fsegurai/codemirror-theme-gruvbox-dark';
 	import { defaultKeymap, indentWithTab } from '@codemirror/commands';
-	import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+	import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+	import { tags } from '@lezer/highlight';
 
-	type ThemeId = 'default' | 'monokai' | 'vscode' | 'github' | 'gruvbox';
+	type ThemeId = 'default' | 'light' | 'monokai' | 'vscode' | 'github' | 'gruvbox';
 
 	let {
 		code = $bindable(''),
@@ -39,6 +40,30 @@
 	let container: HTMLDivElement;
 	let view: EditorView;
 	let mounted = false;
+
+	const lightHighlightStyle = HighlightStyle.define([
+		{ tag: tags.keyword, color: '#cf222e' },
+		{ tag: [tags.controlKeyword, tags.moduleKeyword], color: '#cf222e' },
+		{ tag: [tags.name, tags.deleted, tags.character], color: '#24292f' },
+		{ tag: [tags.variableName], color: '#24292f' },
+		{ tag: [tags.propertyName], color: '#0550ae' },
+		{ tag: [tags.typeName, tags.className], color: '#953800' },
+		{ tag: [tags.namespace], color: '#116329' },
+		{ tag: [tags.operator, tags.operatorKeyword], color: '#0550ae' },
+		{ tag: [tags.bracket, tags.brace, tags.punctuation], color: '#24292f' },
+		{ tag: [tags.function(tags.variableName), tags.labelName], color: '#8250df' },
+		{ tag: tags.definition(tags.variableName), color: '#24292f' },
+		{ tag: [tags.number, tags.bool, tags.null], color: '#0550ae' },
+		{ tag: [tags.string, tags.special(tags.string)], color: '#0a3069' },
+		{ tag: [tags.comment, tags.blockComment, tags.lineComment], color: '#6e7781', fontStyle: 'italic' },
+		{ tag: [tags.meta, tags.processingInstruction], color: '#0550ae' },
+		{ tag: [tags.constant(tags.name), tags.standard(tags.name)], color: '#0550ae' },
+		{ tag: [tags.tagName], color: '#116329' },
+		{ tag: [tags.attributeName], color: '#0550ae' },
+		{ tag: [tags.heading], color: '#0550ae', fontWeight: 'bold' },
+		{ tag: [tags.link, tags.url], color: '#0969da' },
+		{ tag: tags.invalid, color: '#cf222e' },
+	]);
 
 	const langCompartment = new Compartment();
 	const themeCompartment = new Compartment();
@@ -63,6 +88,19 @@
 		}
 	}
 
+	const lightTheme = [
+		EditorView.theme({
+			'&': { backgroundColor: '#ffffff', color: '#24292f' },
+			'.cm-gutters': { backgroundColor: '#f6f8fa', color: '#8c959f', borderRight: '1px solid #eaeef2' },
+			'.cm-activeLine': { backgroundColor: 'rgba(9, 105, 218, 0.06)' },
+			'.cm-activeLineGutter': { backgroundColor: '#eaeef2', color: '#1f2328' },
+			'.cm-selectionBackground, ::selection': { backgroundColor: '#cce5ff' },
+			'.cm-cursor, .cm-dropCursor': { borderLeftColor: '#24292f' },
+			'.cm-matchingBracket': { backgroundColor: '#ddf4ff', outline: '1px solid #0969da' },
+		}, { dark: false }),
+		syntaxHighlighting(lightHighlightStyle),
+	];
+
 	function getThemeExtension(t: ThemeId): Extension {
 		switch (t) {
 			case 'monokai':
@@ -73,6 +111,8 @@
 				return githubDark;
 			case 'gruvbox':
 				return gruvboxDark;
+			case 'light':
+				return lightTheme;
 			case 'default':
 			default:
 				return oneDark;
@@ -82,7 +122,6 @@
 	function createExtensions(lang: string): Extension[] {
 		return [
 			themeCompartment.of(getThemeExtension(editorTheme)),
-			syntaxHighlighting(defaultHighlightStyle),
 			langCompartment.of(getLangExtension(lang)),
 			fontSizeCompartment.of(EditorView.theme({
 				'&': {
@@ -191,18 +230,5 @@
 	.editor :global(.cm-scroller) {
 		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 		line-height: 1.6;
-	}
-
-	.editor :global(.cm-gutters) {
-		background: #0d1117;
-		border-right: 1px solid #21262d;
-	}
-
-	.editor :global(.cm-activeLineGutter) {
-		background: #161b22;
-	}
-
-	.editor :global(.cm-activeLine) {
-		background: rgba(56, 139, 253, 0.04);
 	}
 </style>
