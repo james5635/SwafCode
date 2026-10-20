@@ -235,7 +235,7 @@ func main() {
 					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
 				</div>
 			</div>
-			<CodeEditor bind:code language={selectedLang} onRun={runCode} theme={editorThemeDerived} {fontSize} {showLineNumbers} streaming={streamingEdits} />
+			<CodeEditor bind:code language={selectedLang} onRun={runCode} theme={editorThemeDerived} {fontSize} {showLineNumbers} streaming={streamingEdits} autoScroll={autoScrollStreaming} />
 		</div>
 
 		<div class="panel output-panel">
@@ -283,7 +283,7 @@ func main() {
 				<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="10"></textarea>
 			</div>
 			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
-				<AiChat bind:code language={selectedLang} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} autoScroll={autoScrollStreaming} />
+				<AiChat bind:code language={selectedLang} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} />
 			</div>
 		</div>
 	</main>

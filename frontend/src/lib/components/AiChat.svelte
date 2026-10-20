@@ -25,7 +25,6 @@
 		runCode = async () => '',
 		embedded = false,
 		streaming = true,
-		autoScroll = true,
 	}: {
 		code: string;
 		language: string;
@@ -33,7 +32,6 @@
 		runCode?: () => Promise<string>;
 		embedded?: boolean;
 		streaming?: boolean;
-		autoScroll?: boolean;
 	} = $props();
 
 	let messages = $state<Message[]>([]);
@@ -163,6 +161,12 @@
 		if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
 	}
 
+	function followIfAtBottom() {
+		if (!chatContainer) return;
+		const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+		if (scrollHeight - scrollTop - clientHeight < 100) scrollToBottom();
+	}
+
 	// Streams one LLM turn via SSE. Calls onDelta with the growing text and
 	// returns the accumulated tool calls (empty if the turn was plain text).
 	async function streamTurn(
@@ -260,10 +264,7 @@
 		abortController = new AbortController();
 
 		function doAutoScroll() {
-			if (!chatContainer || !autoScroll) return;
-			const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-			const atBottom = scrollHeight - scrollTop - clientHeight < 100;
-			if (atBottom) scrollToBottom();
+			followIfAtBottom();
 		}
 
 		try {
@@ -290,7 +291,7 @@
 							name: call.function.name,
 						}];
 					}
-					scrollToBottom();
+					followIfAtBottom();
 					continue;
 				}
 
@@ -309,7 +310,7 @@
 		} finally {
 			loading = false;
 			abortController = null;
-			setTimeout(scrollToBottom, 50);
+			setTimeout(followIfAtBottom, 50);
 		}
 	}
 

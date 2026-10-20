@@ -27,6 +27,7 @@
 		fontSize = 14,
 		showLineNumbers = true,
 		streaming = false,
+		autoScroll = true,
 	}: {
 		code: string;
 		language: string;
@@ -35,6 +36,7 @@
 		fontSize?: number;
 		showLineNumbers?: boolean;
 		streaming?: boolean;
+		autoScroll?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -202,9 +204,19 @@
 		if (currentDoc !== code) {
 			if (streaming && code.startsWith(currentDoc)) {
 				// Streaming: only append the new tail
+				const scroller = view.scrollDOM;
+				const atBottom =
+					scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+
 				view.dispatch({
 					changes: { from: currentDoc.length, insert: code.slice(currentDoc.length) },
 				});
+
+				if (autoScroll && atBottom) {
+					view.dispatch({
+						effects: EditorView.scrollIntoView(code.length, { y: 'end' }),
+					});
+				}
 			} else {
 				// Normal: full replace
 				view.dispatch({
