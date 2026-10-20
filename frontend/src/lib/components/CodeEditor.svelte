@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { EditorView, keymap, placeholder as ph } from '@codemirror/view';
-	import { EditorState, type Extension } from '@codemirror/state';
+	import { EditorState, type Extension, Compartment } from '@codemirror/state';
 	import { javascript } from '@codemirror/lang-javascript';
 	import { python } from '@codemirror/lang-python';
+	import { java } from '@codemirror/lang-java';
+	import { cpp } from '@codemirror/lang-cpp';
+	import { rust } from '@codemirror/lang-rust';
+	import { go } from '@codemirror/lang-go';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 	import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -22,31 +26,39 @@
 	let view: EditorView;
 	let mounted = false;
 
+	const langCompartment = new Compartment();
+
 	function getLangExtension(lang: string): Extension {
 		switch (lang) {
 			case 'python':
 				return python();
-			case 'javascript':
+			case 'java':
+				return java();
+			case 'cpp':
+				return cpp();
+			case 'rust':
+				return rust();
+			case 'go':
+				return go();
+			case 'typescript':
 			default:
-				return javascript();
+				return javascript({ typescript: true });
 		}
 	}
 
-	function createExtensions(lang: string): Extension {
+	function createExtensions(lang: string): Extension[] {
 		return [
 			oneDark,
 			syntaxHighlighting(defaultHighlightStyle),
-			getLangExtension(lang),
-			keymap.of([...defaultKeymap, indentWithTab]),
-			keymap.of([
-				{
-					key: 'Mod-Enter',
-					run: () => {
-						onRun?.();
-						return true;
-					},
+			langCompartment.of(getLangExtension(lang)),
+			keymap.of([{
+				key: 'Mod-Enter',
+				run: () => {
+					onRun?.();
+					return true;
 				},
-			]),
+				preventDefault: true,
+			}, ...defaultKeymap, indentWithTab]),
 			EditorView.updateListener.of((update) => {
 				if (update.docChanged) {
 					code = update.state.doc.toString();
@@ -76,10 +88,19 @@
 
 	$effect(() => {
 		if (!mounted || !view) return;
-		const lang = language;
+		view.dispatch({
+			effects: langCompartment.reconfigure(getLangExtension(language)),
+		});
+	});
+
+	$effect(() => {
+		if (!mounted || !view) return;
 		const currentDoc = view.state.doc.toString();
-		view.destroy();
-		view = createView(lang, code || currentDoc);
+		if (currentDoc !== code) {
+			view.dispatch({
+				changes: { from: 0, to: currentDoc.length, insert: code },
+			});
+		}
 	});
 </script>
 

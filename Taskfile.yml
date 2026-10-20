@@ -1,0 +1,114 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: ./backend
+  FRONTEND_DIR: ./frontend
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list
+
+  install:
+    desc: Install dependencies for backend and frontend
+    cmds:
+      - task: install:backend
+      - task: install:frontend
+
+  install:backend:
+    desc: Install backend dependencies
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm install
+
+  install:frontend:
+    desc: Install frontend dependencies
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm install
+
+  dev:
+    desc: Run backend and frontend dev servers in parallel
+    deps: [dev:backend, dev:frontend]
+
+  dev:backend:
+    desc: Run the NestJS backend in watch mode (http://localhost:3000)
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run start:dev
+    status:
+      - "[backend]"
+
+  dev:frontend:
+    desc: Run the SvelteKit frontend dev server (http://localhost:5173)
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run dev
+    status:
+      - "[frontend]"
+
+  build:
+    desc: Build backend and frontend for production
+    cmds:
+      - task: build:backend
+      - task: build:frontend
+
+  build:backend:
+    desc: Compile the NestJS backend
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run build
+
+  build:frontend:
+    desc: Build the SvelteKit frontend
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run build
+
+  start:
+    desc: Run the built backend
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run start:prod
+
+  preview:
+    desc: Serve the built frontend
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run preview
+
+  lint:
+    desc: Lint the backend
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run lint
+
+  format:
+    desc: Format backend sources with prettier
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run format
+
+  check:
+    desc: Type-check the frontend with svelte-check
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run check
+
+  test:
+    desc: Run backend unit tests
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run test
+
+  test:e2e:
+    desc: Run backend end-to-end tests
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - npm run test:e2e
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf ./backend/dist ./backend/coverage ./frontend/build ./frontend/.svelte-kit

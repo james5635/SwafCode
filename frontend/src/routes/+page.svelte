@@ -6,7 +6,7 @@
 	type Language = { id: string; name: string; version: string };
 
 	let languages = $state<Language[]>([]);
-	let selectedLang = $state('javascript');
+	let selectedLang = $state('typescript');
 	let code = $state('console.log("Hello, World!");');
 	let output = $state('');
 	let running = $state(false);
@@ -14,8 +14,34 @@
 	let stderr = $state('');
 
 	const DEFAULT_CODE: Record<string, string> = {
-		javascript: `console.log("Hello, World!");`,
+		typescript: `function greet(name: string): string {
+    return \`Hello, \${name}!\`;
+}
+
+console.log(greet("World"));`,
 		python: `print("Hello, World!")`,
+		java: `public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}`,
+		cpp: `#include <iostream>
+using namespace std;
+
+int main() {
+    cout << "Hello, World!" << endl;
+    return 0;
+}`,
+		rust: `fn main() {
+    println!("Hello, World!");
+}`,
+		go: `package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}`,
 	};
 
 	$effect(() => {
