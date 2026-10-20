@@ -1,17 +1,27 @@
 <script lang="ts">
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
+	import AiChat from '$lib/components/AiChat.svelte';
+	import ApiSettings from '$lib/components/ApiSettings.svelte';
 
 	const API = '/execute';
+	const STORAGE_KEY = 'swafcode:state';
 
 	type Language = { id: string; name: string; version: string };
 
 	let languages = $state<Language[]>([]);
 	let selectedLang = $state('typescript');
-	let code = $state('console.log("Hello, World!");');
+	let code = $state('');
 	let output = $state('');
 	let running = $state(false);
-	let outputTab = $state<'stdout' | 'stderr'>('stdout');
+	let outputTab = $state<'stdout' | 'stderr' | 'ai'>('stdout');
 	let stderr = $state('');
+	let stdin = $state('');
+
+	// Settings
+	let theme = $state<'dark' | 'light'>('dark');
+	let fontSize = $state(14);
+	let showLineNumbers = $state(true);
+	let settingsOpen = $state(false);
 
 	const DEFAULT_CODE: Record<string, string> = {
 		typescript: `function greet(name: string): string {
@@ -44,45 +54,131 @@ func main() {
 }`,
 	};
 
-	$effect(() => {
-		fetch(`${API}/languages`)
-			.then((r) => r.json())
-			.then((data: Language[]) => {
-				languages = data;
-				if (data.length > 0) selectedLang = data[0].id;
-			});
-	});
+	function loadState() {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			const saved = localStorage.getItem(STORAGE_KEY);
+			if (saved) {
+				const state = JSON.parse(saved);
+				if (state.codePerLang) {
+					Object.entries(state.codePerLang).forEach(([lang, c]) => {
+						if (DEFAULT_CODE[lang]) DEFAULT_CODE[lang] = c as string;
+					});
+				}
+				if (state.selectedLang && DEFAULT_CODE[state.selectedLang]) {
+					selectedLang = state.selectedLang;
+				}
+				if (state.theme) theme = state.theme;
+				if (state.fontSize) fontSize = state.fontSize;
+				if (typeof state.showLineNumbers === 'boolean') showLineNumbers = state.showLineNumbers;
+			}
+		} catch {
+			// ignore corrupted storage
+		}
+	}
+
+	function saveState() {
+		if (typeof localStorage === 'undefined') return;
+		const codePerLang: Record<string, string> = {};
+		languages.forEach((l) => {
+			codePerLang[l.id] = DEFAULT_CODE[l.id] ?? '';
+		});
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			codePerLang,
+			selectedLang,
+			theme,
+			fontSize,
+			showLineNumbers,
+		}));
+	}
 
 	function selectLanguage(id: string) {
 		selectedLang = id;
 		code = DEFAULT_CODE[id] ?? '';
 		output = '';
 		stderr = '';
+		saveState();
 	}
 
-	async function runCode() {
+	$effect(() => {
+		fetch(`${API}/languages`)
+			.then((r) => r.json())
+			.then((data: Language[]) => {
+				languages = data;
+				loadState();
+				if (data.length > 0 && !DEFAULT_CODE[selectedLang]) {
+					selectedLang = data[0].id;
+				}
+				code = DEFAULT_CODE[selectedLang] ?? '';
+			});
+	});
+
+	$effect(() => {
+		if (code && DEFAULT_CODE[selectedLang] !== code) {
+			DEFAULT_CODE[selectedLang] = code;
+			saveState();
+		}
+	});
+
+	$effect(() => {
+		saveState();
+	});
+
+	async function runCode(switchTab = true) {
 		if (!code.trim() || running) return;
 		running = true;
 		output = '';
 		stderr = '';
-		outputTab = 'stdout';
+		if (switchTab) outputTab = 'stdout';
 
 		try {
 			const res = await fetch(API, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ code, language: selectedLang }),
+				body: JSON.stringify({ code, language: selectedLang, stdin }),
 			});
 			const data = await res.json();
 			output = data.output ?? '';
 			stderr = data.error ?? '';
-			if (stderr) outputTab = 'stderr';
+			if (switchTab) outputTab = stderr ? 'stderr' : 'stdout';
 		} catch (err: any) {
 			stderr = `Request failed: ${err.message}`;
-			outputTab = 'stderr';
+			if (switchTab) outputTab = 'stderr';
 		} finally {
 			running = false;
 		}
+	}
+
+	function copyToClipboard(text: string, label: string) {
+		navigator.clipboard.writeText(text).then(() => {
+			// could show toast
+			console.log(`${label} copied`);
+		});
+	}
+
+	function copyCode() {
+		copyToClipboard(code, 'Code');
+	}
+
+	function copyOutput() {
+		copyToClipboard(outputTab === 'stdout' ? output : stderr, 'Output');
+	}
+
+	function clearOutput() {
+		output = '';
+		stderr = '';
+	}
+
+	function getOutput(): string {
+		const parts: string[] = [];
+		if (output) parts.push(`stdout:\n${output}`);
+		if (stderr) parts.push(`stderr:\n${stderr}`);
+		return parts.join('\n\n') || '(no output yet)';
+	}
+
+	async function runAndGetOutput(): Promise<string> {
+		await runCode(false);
+		return getOutput();
 	}
 </script>
 
@@ -90,7 +186,7 @@ func main() {
 	<title>SwafCode</title>
 </svelte:head>
 
-<div class="app">
+<div class="app" class:light={theme === 'light'}>
 	<header>
 		<h1>Swaf<span>Code</span></h1>
 		<div class="header-controls">
@@ -105,7 +201,18 @@ func main() {
 					</button>
 				{/each}
 			</div>
-			<button class="run-btn" onclick={runCode} disabled={running}>
+			<div class="header-actions">
+				<button class="icon-btn" onclick={() => settingsOpen = true} title="AI Settings">⚙️</button>
+				<button class="icon-btn" onclick={() => theme = theme === 'dark' ? 'light' : 'dark'} title="Toggle theme">
+					{theme === 'dark' ? '☀️' : '🌙'}
+				</button>
+				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
+				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
+				<button class="icon-btn" onclick={() => showLineNumbers = !showLineNumbers} title="Toggle line numbers">
+					{showLineNumbers ? '☰' : '☰'}
+				</button>
+			</div>
+			<button class="run-btn" onclick={() => runCode()} disabled={running}>
 				{#if running}
 					<span class="spinner"></span> Running...
 				{:else}
@@ -119,9 +226,25 @@ func main() {
 		<div class="panel editor-panel">
 			<div class="panel-header">
 				<span class="panel-title">Editor</span>
-				<span class="shortcut">Ctrl+Enter to run</span>
+				<div class="editor-actions">
+					<label class="checkbox-label">
+						<input type="checkbox" checked={showLineNumbers} onchange={() => showLineNumbers = !showLineNumbers} />
+						<span>Line numbers</span>
+					</label>
+					<label class="checkbox-label">
+						<input type="checkbox" checked={stdin !== ''} onchange={() => stdin = stdin ? '' : ' '} />
+						<span>Stdin</span>
+					</label>
+					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
+				</div>
 			</div>
-			<CodeEditor bind:code language={selectedLang} onRun={runCode} />
+			<CodeEditor bind:code language={selectedLang} onRun={runCode} {theme} {fontSize} {showLineNumbers} />
+			{#if stdin !== ''}
+				<div class="stdin-panel">
+					<div class="stdin-header">Stdin Input</div>
+					<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="3"></textarea>
+				</div>
+			{/if}
 		</div>
 
 		<div class="panel output-panel">
@@ -142,11 +265,30 @@ func main() {
 						Errors
 						{#if stderr}<span class="badge"></span>{/if}
 					</button>
+					<button
+						class="tab"
+						class:active={outputTab === 'ai'}
+						onclick={() => (outputTab = 'ai')}
+					>
+						AI Agent
+					</button>
 				</div>
+				{#if outputTab !== 'ai'}
+					<div class="output-actions">
+						<button class="icon-btn secondary" onclick={copyOutput} title="Copy output">📋</button>
+						<button class="icon-btn secondary" onclick={clearOutput} title="Clear output">🗑️</button>
+					</div>
+				{/if}
 			</div>
-			<pre class="output-content"><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
+			{#if outputTab === 'ai'}
+				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded />
+			{:else}
+				<pre class="output-content"><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
+			{/if}
 		</div>
 	</main>
+
+	<ApiSettings open={settingsOpen} onClose={() => settingsOpen = false} />
 </div>
 
 <style>
@@ -154,6 +296,94 @@ func main() {
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
+		background: #0d1117;
+		color: #c9d1d9;
+		transition: background 0.2s, color 0.2s;
+	}
+
+	.app.light {
+		background: #ffffff;
+		color: #24292f;
+	}
+
+	.app.light header {
+		background: #f6f8fa;
+		border-bottom: 1px solid #d0d7de;
+	}
+
+	.app.light .lang-tabs {
+		background: #ffffff;
+		border: 1px solid #d0d7de;
+	}
+
+	.app.light .lang-tab {
+		color: #656d76;
+	}
+
+	.app.light .lang-tab:hover {
+		color: #24292f;
+		background: #f3f4f6;
+	}
+
+	.app.light .lang-tab.active {
+		background: #eaeef2;
+		color: #24292f;
+	}
+
+	.app.light .panel-header {
+		background: #f6f8fa;
+		border-bottom: 1px solid #d0d7de;
+	}
+
+	.app.light .panel-title {
+		color: #656d76;
+	}
+
+	.app.light .tab {
+		color: #656d76;
+	}
+
+	.app.light .tab:hover {
+		color: #24292f;
+	}
+
+	.app.light .tab.active {
+		background: #eaeef2;
+		color: #24292f;
+	}
+
+	.app.light .output-content {
+		background: #f6f8fa;
+		color: #24292f;
+	}
+
+	.app.light .stdin-panel {
+		background: #f6f8fa;
+		border-top: 1px solid #d0d7de;
+	}
+
+	.app.light .stdin-panel textarea {
+		background: #ffffff;
+		border: 1px solid #d0d7de;
+		color: #24292f;
+	}
+
+	.app.light .icon-btn {
+		background: #f3f4f6;
+		color: #24292f;
+		border: 1px solid #d0d7de;
+	}
+
+	.app.light .icon-btn:hover {
+		background: #eaeef2;
+	}
+
+	.app.light .icon-btn.secondary {
+		background: #f3f4f6;
+	}
+
+	.app.light .checkbox-label {
+		color: #24292f;
 	}
 
 	/* Header */
@@ -211,6 +441,38 @@ func main() {
 	.lang-tab.active {
 		background: #21262d;
 		color: #f0f6fc;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: 6px;
+		background: #21262d;
+		color: #c9d1d9;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.icon-btn:hover {
+		background: #30363d;
+	}
+
+	.icon-btn.secondary {
+		background: #21262d;
+		font-size: 0.8rem;
+		padding: 0 8px;
+		width: auto;
 	}
 
 	.run-btn {
@@ -280,6 +542,22 @@ func main() {
 		min-height: 40px;
 	}
 
+	.editor-actions,
+	.output-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.8rem;
+		color: #8b949e;
+		cursor: pointer;
+	}
+
 	.panel-title {
 		font-size: 0.8rem;
 		font-weight: 600;
@@ -288,8 +566,35 @@ func main() {
 		letter-spacing: 0.05em;
 	}
 
-	.shortcut {
+	/* Stdin panel */
+	.stdin-panel {
+		border-top: 1px solid #30363d;
+		background: #161b22;
+	}
+
+	.stdin-header {
+		padding: 8px 16px;
 		font-size: 0.75rem;
+		font-weight: 600;
+		color: #8b949e;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.stdin-panel textarea {
+		width: 100%;
+		padding: 8px 16px;
+		background: #0d1117;
+		border: none;
+		color: #c9d1d9;
+		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+		font-size: 0.85rem;
+		line-height: 1.6;
+		resize: none;
+		outline: none;
+	}
+
+	.stdin-panel textarea::placeholder {
 		color: #484f58;
 	}
 

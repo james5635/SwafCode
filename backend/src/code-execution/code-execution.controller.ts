@@ -33,6 +33,6 @@ export class CodeExecutionController {
       );
     }
 
-    return this.codeExecutionService.execute(dto.code, dto.language);
+    return this.codeExecutionService.execute(dto.code, dto.language, dto.stdin);
   }
 }

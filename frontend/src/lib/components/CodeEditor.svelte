@@ -1,25 +1,31 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { EditorView, keymap, placeholder as ph } from '@codemirror/view';
-	import { EditorState, type Extension, Compartment } from '@codemirror/state';
-	import { javascript } from '@codemirror/lang-javascript';
-	import { python } from '@codemirror/lang-python';
-	import { java } from '@codemirror/lang-java';
-	import { cpp } from '@codemirror/lang-cpp';
-	import { rust } from '@codemirror/lang-rust';
-	import { go } from '@codemirror/lang-go';
-	import { oneDark } from '@codemirror/theme-one-dark';
-	import { defaultKeymap, indentWithTab } from '@codemirror/commands';
-	import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { onMount, onDestroy } from 'svelte';
+import { EditorView, keymap, placeholder as ph, lineNumbers } from '@codemirror/view';
+import { EditorState, type Extension, Compartment } from '@codemirror/state';
+import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
+import { java } from '@codemirror/lang-java';
+import { cpp } from '@codemirror/lang-cpp';
+import { rust } from '@codemirror/lang-rust';
+import { go } from '@codemirror/lang-go';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
 	let {
 		code = $bindable(''),
-		language = 'javascript',
+		language = 'typescript',
 		onRun,
+		theme = 'dark',
+		fontSize = 14,
+		showLineNumbers = true,
 	}: {
 		code: string;
 		language: string;
 		onRun?: () => void;
+		theme?: 'dark' | 'light';
+		fontSize?: number;
+		showLineNumbers?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -27,6 +33,9 @@
 	let mounted = false;
 
 	const langCompartment = new Compartment();
+	const themeCompartment = new Compartment();
+	const fontSizeCompartment = new Compartment();
+	const lineNumbersCompartment = new Compartment();
 
 	function getLangExtension(lang: string): Extension {
 		switch (lang) {
@@ -46,11 +55,43 @@
 		}
 	}
 
+	function getThemeExtension(t: 'dark' | 'light'): Extension {
+		if (t === 'dark') {
+			return oneDark;
+		}
+		// Light theme using default highlight style
+		return EditorView.theme({
+			'&': {
+				backgroundColor: '#ffffff',
+				color: '#24292f',
+			},
+			'.cm-gutters': {
+				backgroundColor: '#f6f8fa',
+				borderRight: '1px solid #d0d7de',
+			},
+			'.cm-activeLineGutter': {
+				backgroundColor: '#eaeef2',
+			},
+			'.cm-activeLine': {
+				backgroundColor: 'rgba(9, 105, 218, 0.04)',
+			},
+			'.cm-selectionBackground': {
+				backgroundColor: '#cce5ff',
+			},
+		});
+	}
+
 	function createExtensions(lang: string): Extension[] {
 		return [
-			oneDark,
+			themeCompartment.of(getThemeExtension(theme)),
 			syntaxHighlighting(defaultHighlightStyle),
 			langCompartment.of(getLangExtension(lang)),
+			fontSizeCompartment.of(EditorView.theme({
+				'&': {
+					fontSize: `${fontSize}px`,
+				},
+			})),
+			lineNumbersCompartment.of(showLineNumbers ? lineNumbers() : []),
 			keymap.of([{
 				key: 'Mod-Enter',
 				run: () => {
@@ -95,6 +136,31 @@
 
 	$effect(() => {
 		if (!mounted || !view) return;
+		view.dispatch({
+			effects: themeCompartment.reconfigure(getThemeExtension(theme)),
+		});
+	});
+
+	$effect(() => {
+		if (!mounted || !view) return;
+		view.dispatch({
+			effects: fontSizeCompartment.reconfigure(EditorView.theme({
+				'&': {
+					fontSize: `${fontSize}px`,
+				},
+			})),
+		});
+	});
+
+	$effect(() => {
+		if (!mounted || !view) return;
+		view.dispatch({
+			effects: lineNumbersCompartment.reconfigure(showLineNumbers ? lineNumbers() : []),
+		});
+	});
+
+	$effect(() => {
+		if (!mounted || !view) return;
 		const currentDoc = view.state.doc.toString();
 		if (currentDoc !== code) {
 			view.dispatch({
@@ -118,7 +184,6 @@
 
 	.editor :global(.cm-scroller) {
 		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-		font-size: 0.9rem;
 		line-height: 1.6;
 	}
 

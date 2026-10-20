@@ -67,7 +67,7 @@ export class CodeExecutionService {
     },
   };
 
-  async execute(code: string, language: string) {
+  async execute(code: string, language: string, stdin?: string) {
     const config = this.languages[language];
     if (!config) {
       throw new Error(`Unsupported language: ${language}`);
@@ -109,16 +109,22 @@ export class CodeExecutionService {
       const proc = spawn(execCommand, execArgs, {
         timeout: this.TIMEOUT_MS,
         cwd: execDir,
+        stdio: stdin ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
       });
 
       let stdout = '';
       let stderr = '';
 
-      proc.stdout.on('data', (data: Buffer) => {
+      if (stdin && proc.stdin) {
+        proc.stdin.write(stdin);
+        proc.stdin.end();
+      }
+
+      proc.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
       });
 
-      proc.stderr.on('data', (data: Buffer) => {
+      proc.stderr?.on('data', (data: Buffer) => {
         stderr += data.toString();
       });
 
