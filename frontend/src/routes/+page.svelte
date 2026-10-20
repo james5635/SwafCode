@@ -208,9 +208,6 @@ func main() {
 				</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
-				<button class="icon-btn" onclick={() => showLineNumbers = !showLineNumbers} title="Toggle line numbers">
-					{showLineNumbers ? '☰' : '☰'}
-				</button>
 			</div>
 			<button class="run-btn" onclick={() => runCode()} disabled={running}>
 				{#if running}
@@ -280,11 +277,10 @@ func main() {
 					</div>
 				{/if}
 			</div>
-			{#if outputTab === 'ai'}
+			<pre class="output-content" class:hidden={outputTab === 'ai'}><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
+			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
 				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded />
-			{:else}
-				<pre class="output-content"><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
-			{/if}
+			</div>
 		</div>
 	</main>
 
@@ -648,5 +644,16 @@ func main() {
 		white-space: pre-wrap;
 		word-break: break-word;
 		margin: 0;
+	}
+
+	.ai-wrapper {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.hidden {
+		display: none;
 	}
 </style>
