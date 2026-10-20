@@ -25,6 +25,7 @@
 		getOutput = () => '',
 		runCode = async () => '',
 		embedded = false,
+		streaming = true,
 	}: {
 		code: string;
 		language: string;
@@ -32,6 +33,7 @@
 		getOutput?: () => string;
 		runCode?: () => Promise<string>;
 		embedded?: boolean;
+		streaming?: boolean;
 	} = $props();
 
 	let messages = $state<Message[]>([]);
@@ -125,12 +127,31 @@
 		switch (call.function.name) {
 			case 'get_code':
 				return code || '// (empty)';
-			case 'set_code':
-				code = args.code ?? '';
-				return `Code updated (${(args.code ?? '').length} chars)`;
-			case 'append_code':
-				code = (code ? code + '\n' : '') + (args.code ?? '');
+			case 'set_code': {
+				const newCode = args.code ?? '';
+				if (streaming) {
+					// Stream character by character
+					for (let i = 0; i <= newCode.length; i++) {
+						code = newCode.slice(0, i);
+						await new Promise((r) => setTimeout(r, 3));
+					}
+					return `Code updated (${newCode.length} chars, streamed)`;
+				}
+				code = newCode;
+				return `Code updated (${newCode.length} chars)`;
+			}
+			case 'append_code': {
+				const newCode = (code ? code + '\n' : '') + (args.code ?? '');
+				if (streaming) {
+					for (let i = 0; i <= newCode.length; i++) {
+						code = newCode.slice(0, i);
+						await new Promise((r) => setTimeout(r, 3));
+					}
+					return 'Code appended (streamed)';
+				}
+				code = newCode;
 				return 'Code appended';
+			}
 			case 'run_code':
 				return await runCode();
 			default:

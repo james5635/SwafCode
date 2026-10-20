@@ -19,6 +19,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 		theme = 'dark',
 		fontSize = 14,
 		showLineNumbers = true,
+		streaming = false,
 	}: {
 		code: string;
 		language: string;
@@ -26,6 +27,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 		theme?: 'dark' | 'light';
 		fontSize?: number;
 		showLineNumbers?: boolean;
+		streaming?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -101,7 +103,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 				preventDefault: true,
 			}, ...defaultKeymap, indentWithTab]),
 			EditorView.updateListener.of((update) => {
-				if (update.docChanged) {
+				if (!streaming && update.docChanged) {
 					code = update.state.doc.toString();
 				}
 			}),

@@ -21,6 +21,7 @@
 	let theme = $state<'dark' | 'light'>('dark');
 	let fontSize = $state(14);
 	let showLineNumbers = $state(true);
+	let streamingEdits = $state(true);
 	let settingsOpen = $state(false);
 
 	const DEFAULT_CODE: Record<string, string> = {
@@ -208,6 +209,10 @@ func main() {
 				</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
+				<label class="checkbox-label">
+					<input type="checkbox" checked={streamingEdits} onchange={() => streamingEdits = !streamingEdits} />
+					<span>⚡ Streaming</span>
+				</label>
 			</div>
 			<button class="run-btn" onclick={() => runCode()} disabled={running}>
 				{#if running}
@@ -235,7 +240,7 @@ func main() {
 					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
 				</div>
 			</div>
-			<CodeEditor bind:code language={selectedLang} onRun={runCode} {theme} {fontSize} {showLineNumbers} />
+			<CodeEditor bind:code language={selectedLang} onRun={runCode} {theme} {fontSize} {showLineNumbers} streaming={streamingEdits} />
 			{#if stdin !== ''}
 				<div class="stdin-panel">
 					<div class="stdin-header">Stdin Input</div>
@@ -279,7 +284,7 @@ func main() {
 			</div>
 			<pre class="output-content" class:hidden={outputTab === 'ai'}><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
 			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
-				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded />
+				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} />
 			</div>
 		</div>
 	</main>
