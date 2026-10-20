@@ -2,6 +2,7 @@
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import AiChat from '$lib/components/AiChat.svelte';
 	import ApiSettings from '$lib/components/ApiSettings.svelte';
+	import { generalSettings } from '$lib/stores/general-settings';
 
 	const API = '/execute';
 	const STORAGE_KEY = 'swafcode:state';
@@ -18,11 +19,15 @@
 	let stdin = $state('');
 
 	// Settings
-	let theme = $state<'dark' | 'light'>('dark');
 	let fontSize = $state(14);
 	let showLineNumbers = $state(true);
 	let streamingEdits = $state(true);
 	let settingsOpen = $state(false);
+	let editorTheme = $state<'default' | 'monokai' | 'vscode' | 'github' | 'gruvbox'>('default');
+
+	// Derived from general settings store
+	let autoScrollStreaming = $derived($generalSettings.autoScrollStreaming);
+	let editorThemeDerived = $derived($generalSettings.theme);
 
 	const DEFAULT_CODE: Record<string, string> = {
 		typescript: `function greet(name: string): string {
@@ -69,7 +74,6 @@ func main() {
 				if (state.selectedLang && DEFAULT_CODE[state.selectedLang]) {
 					selectedLang = state.selectedLang;
 				}
-				if (state.theme) theme = state.theme;
 				if (state.fontSize) fontSize = state.fontSize;
 				if (typeof state.showLineNumbers === 'boolean') showLineNumbers = state.showLineNumbers;
 			}
@@ -87,7 +91,6 @@ func main() {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({
 			codePerLang,
 			selectedLang,
-			theme,
 			fontSize,
 			showLineNumbers,
 		}));
@@ -187,7 +190,7 @@ func main() {
 	<title>SwafCode</title>
 </svelte:head>
 
-<div class="app" class:light={theme === 'light'}>
+<div class="app" class:light={editorTheme !== 'default'}>
 	<header>
 		<h1>Swaf<span>Code</span></h1>
 		<div class="header-controls">
@@ -204,9 +207,6 @@ func main() {
 			</div>
 			<div class="header-actions">
 				<button class="icon-btn" onclick={() => settingsOpen = true} title="AI Settings">⚙️</button>
-				<button class="icon-btn" onclick={() => theme = theme === 'dark' ? 'light' : 'dark'} title="Toggle theme">
-					{theme === 'dark' ? '☀️' : '🌙'}
-				</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
 			</div>
@@ -236,7 +236,7 @@ func main() {
 					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
 				</div>
 			</div>
-			<CodeEditor bind:code language={selectedLang} onRun={runCode} {theme} {fontSize} {showLineNumbers} streaming={streamingEdits} />
+			<CodeEditor bind:code language={selectedLang} onRun={runCode} theme={editorThemeDerived} {fontSize} {showLineNumbers} streaming={streamingEdits} />
 		</div>
 
 		<div class="panel output-panel">
@@ -284,7 +284,7 @@ func main() {
 				<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="10"></textarea>
 			</div>
 			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
-				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} />
+				<AiChat bind:code language={selectedLang} theme="dark" getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} autoScroll={autoScrollStreaming} />
 			</div>
 		</div>
 	</main>

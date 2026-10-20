@@ -1,22 +1,28 @@
 <script lang="ts">
-import { onMount, onDestroy } from 'svelte';
-import { EditorView, keymap, placeholder as ph, lineNumbers } from '@codemirror/view';
-import { EditorState, type Extension, Compartment } from '@codemirror/state';
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { java } from '@codemirror/lang-java';
-import { cpp } from '@codemirror/lang-cpp';
-import { rust } from '@codemirror/lang-rust';
-import { go } from '@codemirror/lang-go';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { defaultKeymap, indentWithTab } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+	import { onMount, onDestroy } from 'svelte';
+	import { EditorView, keymap, placeholder as ph, lineNumbers } from '@codemirror/view';
+	import { EditorState, type Extension, Compartment } from '@codemirror/state';
+	import { javascript } from '@codemirror/lang-javascript';
+	import { python } from '@codemirror/lang-python';
+	import { java } from '@codemirror/lang-java';
+	import { cpp } from '@codemirror/lang-cpp';
+	import { rust } from '@codemirror/lang-rust';
+	import { go } from '@codemirror/lang-go';
+	import { oneDark } from '@codemirror/theme-one-dark';
+	import { monokai } from '@fsegurai/codemirror-theme-monokai';
+	import { vsCodeDark } from '@fsegurai/codemirror-theme-vscode-dark';
+	import { githubDark } from '@fsegurai/codemirror-theme-github-dark';
+	import { gruvboxDark } from '@fsegurai/codemirror-theme-gruvbox-dark';
+	import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+	import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+
+	type ThemeId = 'default' | 'monokai' | 'vscode' | 'github' | 'gruvbox';
 
 	let {
 		code = $bindable(''),
 		language = 'typescript',
 		onRun,
-		theme = 'dark',
+		theme: editorTheme = 'default',
 		fontSize = 14,
 		showLineNumbers = true,
 		streaming = false,
@@ -24,7 +30,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 		code: string;
 		language: string;
 		onRun?: () => void;
-		theme?: 'dark' | 'light';
+		theme?: ThemeId;
 		fontSize?: number;
 		showLineNumbers?: boolean;
 		streaming?: boolean;
@@ -57,35 +63,25 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 		}
 	}
 
-	function getThemeExtension(t: 'dark' | 'light'): Extension {
-		if (t === 'dark') {
-			return oneDark;
+	function getThemeExtension(t: ThemeId): Extension {
+		switch (t) {
+			case 'monokai':
+				return monokai;
+			case 'vscode':
+				return vsCodeDark;
+			case 'github':
+				return githubDark;
+			case 'gruvbox':
+				return gruvboxDark;
+			case 'default':
+			default:
+				return oneDark;
 		}
-		// Light theme using default highlight style
-		return EditorView.theme({
-			'&': {
-				backgroundColor: '#ffffff',
-				color: '#24292f',
-			},
-			'.cm-gutters': {
-				backgroundColor: '#f6f8fa',
-				borderRight: '1px solid #d0d7de',
-			},
-			'.cm-activeLineGutter': {
-				backgroundColor: '#eaeef2',
-			},
-			'.cm-activeLine': {
-				backgroundColor: 'rgba(9, 105, 218, 0.04)',
-			},
-			'.cm-selectionBackground': {
-				backgroundColor: '#cce5ff',
-			},
-		});
 	}
 
 	function createExtensions(lang: string): Extension[] {
 		return [
-			themeCompartment.of(getThemeExtension(theme)),
+			themeCompartment.of(getThemeExtension(editorTheme)),
 			syntaxHighlighting(defaultHighlightStyle),
 			langCompartment.of(getLangExtension(lang)),
 			fontSizeCompartment.of(EditorView.theme({
@@ -139,7 +135,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 	$effect(() => {
 		if (!mounted || !view) return;
 		view.dispatch({
-			effects: themeCompartment.reconfigure(getThemeExtension(theme)),
+			effects: themeCompartment.reconfigure(getThemeExtension(editorTheme)),
 		});
 	});
 

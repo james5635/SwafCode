@@ -26,6 +26,7 @@
 		runCode = async () => '',
 		embedded = false,
 		streaming = true,
+		autoScroll = true,
 	}: {
 		code: string;
 		language: string;
@@ -34,6 +35,7 @@
 		runCode?: () => Promise<string>;
 		embedded?: boolean;
 		streaming?: boolean;
+		autoScroll?: boolean;
 	} = $props();
 
 	let messages = $state<Message[]>([]);
@@ -259,8 +261,8 @@
 		loading = true;
 		abortController = new AbortController();
 
-		function autoScroll() {
-			if (!chatContainer) return;
+		function doAutoScroll() {
+			if (!chatContainer || !autoScroll) return;
 			const { scrollTop, scrollHeight, clientHeight } = chatContainer;
 			const atBottom = scrollHeight - scrollTop - clientHeight < 100;
 			if (atBottom) scrollToBottom();
@@ -275,7 +277,7 @@
 				const { content, toolCalls } = await streamTurn(messages, (t) => {
 					latest = t;
 					streamingContent = t;
-					requestAnimationFrame(autoScroll);
+					requestAnimationFrame(doAutoScroll);
 				}, abortController.signal);
 
 				if (toolCalls.length) {
