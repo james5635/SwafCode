@@ -165,9 +165,17 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 		if (!mounted || !view) return;
 		const currentDoc = view.state.doc.toString();
 		if (currentDoc !== code) {
-			view.dispatch({
-				changes: { from: 0, to: currentDoc.length, insert: code },
-			});
+			if (streaming && code.startsWith(currentDoc)) {
+				// Streaming: only append the new tail
+				view.dispatch({
+					changes: { from: currentDoc.length, insert: code.slice(currentDoc.length) },
+				});
+			} else {
+				// Normal: full replace
+				view.dispatch({
+					changes: { from: 0, to: currentDoc.length, insert: code },
+				});
+			}
 		}
 	});
 </script>

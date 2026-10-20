@@ -259,6 +259,13 @@
 		loading = true;
 		abortController = new AbortController();
 
+		function autoScroll() {
+			if (!chatContainer) return;
+			const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+			const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+			if (atBottom) scrollToBottom();
+		}
+
 		try {
 			const maxRounds = 6;
 
@@ -268,7 +275,7 @@
 				const { content, toolCalls } = await streamTurn(messages, (t) => {
 					latest = t;
 					streamingContent = t;
-					requestAnimationFrame(scrollToBottom);
+					requestAnimationFrame(autoScroll);
 				}, abortController.signal);
 
 				if (toolCalls.length) {

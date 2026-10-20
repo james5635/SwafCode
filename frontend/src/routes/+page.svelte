@@ -13,7 +13,7 @@
 	let code = $state('');
 	let output = $state('');
 	let running = $state(false);
-	let outputTab = $state<'stdout' | 'stderr' | 'ai'>('stdout');
+	let outputTab = $state<'stdout' | 'stderr' | 'stdin' | 'ai'>('stdout');
 	let stderr = $state('');
 	let stdin = $state('');
 
@@ -209,10 +209,6 @@ func main() {
 				</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
 				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
-				<label class="checkbox-label">
-					<input type="checkbox" checked={streamingEdits} onchange={() => streamingEdits = !streamingEdits} />
-					<span>⚡ Streaming</span>
-				</label>
 			</div>
 			<button class="run-btn" onclick={() => runCode()} disabled={running}>
 				{#if running}
@@ -234,19 +230,13 @@ func main() {
 						<span>Line numbers</span>
 					</label>
 					<label class="checkbox-label">
-						<input type="checkbox" checked={stdin !== ''} onchange={() => stdin = stdin ? '' : ' '} />
-						<span>Stdin</span>
+						<input type="checkbox" checked={streamingEdits} onchange={() => streamingEdits = !streamingEdits} />
+						<span>Streaming</span>
 					</label>
 					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
 				</div>
 			</div>
 			<CodeEditor bind:code language={selectedLang} onRun={runCode} {theme} {fontSize} {showLineNumbers} streaming={streamingEdits} />
-			{#if stdin !== ''}
-				<div class="stdin-panel">
-					<div class="stdin-header">Stdin Input</div>
-					<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="3"></textarea>
-				</div>
-			{/if}
 		</div>
 
 		<div class="panel output-panel">
@@ -269,20 +259,30 @@ func main() {
 					</button>
 					<button
 						class="tab"
+						class:active={outputTab === 'stdin'}
+						onclick={() => (outputTab = 'stdin')}
+					>
+						Stdin
+					</button>
+					<button
+						class="tab"
 						class:active={outputTab === 'ai'}
 						onclick={() => (outputTab = 'ai')}
 					>
 						AI Agent
 					</button>
 				</div>
-				{#if outputTab !== 'ai'}
+				{#if outputTab !== 'ai' && outputTab !== 'stdin'}
 					<div class="output-actions">
 						<button class="icon-btn secondary" onclick={copyOutput} title="Copy output">📋</button>
 						<button class="icon-btn secondary" onclick={clearOutput} title="Clear output">🗑️</button>
 					</div>
 				{/if}
 			</div>
-			<pre class="output-content" class:hidden={outputTab === 'ai'}><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
+			<pre class="output-content" class:hidden={outputTab === 'ai' || outputTab === 'stdin'}><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
+			<div class="stdin-wrapper" class:hidden={outputTab !== 'stdin'}>
+				<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="10"></textarea>
+			</div>
 			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
 				<AiChat bind:code language={selectedLang} {theme} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} />
 			</div>
@@ -355,17 +355,6 @@ func main() {
 
 	.app.light .output-content {
 		background: #f6f8fa;
-		color: #24292f;
-	}
-
-	.app.light .stdin-panel {
-		background: #f6f8fa;
-		border-top: 1px solid #d0d7de;
-	}
-
-	.app.light .stdin-panel textarea {
-		background: #ffffff;
-		border: 1px solid #d0d7de;
 		color: #24292f;
 	}
 
@@ -565,41 +554,9 @@ func main() {
 		color: #8b949e;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-	}
+}
 
-	/* Stdin panel */
-	.stdin-panel {
-		border-top: 1px solid #30363d;
-		background: #161b22;
-	}
-
-	.stdin-header {
-		padding: 8px 16px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #8b949e;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.stdin-panel textarea {
-		width: 100%;
-		padding: 8px 16px;
-		background: #0d1117;
-		border: none;
-		color: #c9d1d9;
-		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-		font-size: 0.85rem;
-		line-height: 1.6;
-		resize: none;
-		outline: none;
-	}
-
-	.stdin-panel textarea::placeholder {
-		color: #484f58;
-	}
-
-	/* Output panel */
+/* Output panel */
 	.output-tabs {
 		display: flex;
 		gap: 4px;
@@ -656,6 +613,38 @@ func main() {
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.stdin-wrapper {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 16px;
+	}
+
+	.stdin-wrapper textarea {
+		flex: 1;
+		resize: none;
+		background: #0d1117;
+		border: 1px solid #30363d;
+		border-radius: 8px;
+		color: #f0f6fc;
+		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+		font-size: 0.85rem;
+		line-height: 1.6;
+		padding: 12px;
+		outline: none;
+	}
+
+	.stdin-wrapper textarea:focus {
+		border-color: #58a6ff;
+	}
+
+	.app.light .stdin-wrapper textarea {
+		background: #ffffff;
+		border: 1px solid #d0d7de;
+		color: #24292f;
 	}
 
 	.hidden {
