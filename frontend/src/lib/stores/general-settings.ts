@@ -97,10 +97,6 @@ export const generalSettingsActions = {
 			persist(next);
 			return next;
 		});
-	},
-	apply(next: GeneralSettings) {
-		generalSettings.set(next);
-		persist(next);
 	}
 };
 

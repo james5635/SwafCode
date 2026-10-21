@@ -16,32 +16,11 @@
 	let view = $state<View>('general');
 	let dialog = $state<HTMLElement>();
 
-	let generalDraft = $state({
-		theme: 'default' as ThemeId,
-		fontSize: 14,
-		lineNumbers: true,
-		streamEdits: true,
-		autoScrollStreaming: true
-	});
-
-	let aiDraft = $state({ baseUrl: '', apiKey: '', model: '' });
-
 	$effect(() => {
 		if (!open) return;
-		generalDraft = { ...$generalSettings };
-		aiDraft = { ...$aiSettings };
 		view = 'general';
 		requestAnimationFrame(() => dialog?.focus());
 	});
-
-	function save() {
-		if (view === 'general') {
-			generalSettingsActions.apply({ ...generalDraft });
-		} else {
-			aiSettings.set({ ...aiDraft });
-		}
-		onClose();
-	}
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
@@ -75,7 +54,7 @@
 	});
 
 	const endpoint = $derived(
-		`${(aiDraft.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`
+		`${($aiSettings.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`
 	);
 </script>
 
@@ -113,6 +92,7 @@
 							{view === 'general'
 								? 'How the editor looks and behaves. The interface follows the editor theme.'
 								: 'Where the agent sends its requests. Nothing leaves this browser except the request itself.'}
+							Changes apply as you make them.
 						</p>
 					</div>
 					<button class="icon-btn" aria-label="Close settings" onclick={onClose}>
@@ -129,7 +109,11 @@
 							</div>
 							<div class="row-control">
 								<div class="select-wrap">
-									<select class="input" bind:value={generalDraft.theme}>
+									<select
+										class="input"
+										value={$generalSettings.theme}
+										onchange={(e) => generalSettingsActions.setTheme(e.currentTarget.value as ThemeId)}
+									>
 										{#each themeList as t}
 											<option value={t.id}>{t.name}</option>
 										{/each}
@@ -148,8 +132,8 @@
 								<div class="segmented" role="group" aria-label="Editor font size">
 									{#each fontSizes as size}
 										<button
-											aria-pressed={generalDraft.fontSize === size}
-											onclick={() => (generalDraft.fontSize = size)}
+											aria-pressed={$generalSettings.fontSize === size}
+											onclick={() => generalSettingsActions.setFontSize(size)}
 										>
 											{size}
 										</button>
@@ -167,9 +151,9 @@
 								<button
 									class="switch"
 									role="switch"
-									aria-checked={generalDraft.lineNumbers}
+									aria-checked={$generalSettings.lineNumbers}
 									aria-label="Line numbers"
-									onclick={() => (generalDraft.lineNumbers = !generalDraft.lineNumbers)}
+									onclick={() => generalSettingsActions.setLineNumbers(!$generalSettings.lineNumbers)}
 								></button>
 							</div>
 						</div>
@@ -183,9 +167,9 @@
 								<button
 									class="switch"
 									role="switch"
-									aria-checked={generalDraft.streamEdits}
+									aria-checked={$generalSettings.streamEdits}
 									aria-label="Stream edits"
-									onclick={() => (generalDraft.streamEdits = !generalDraft.streamEdits)}
+									onclick={() => generalSettingsActions.setStreamEdits(!$generalSettings.streamEdits)}
 								></button>
 							</div>
 						</div>
@@ -199,9 +183,9 @@
 								<button
 									class="switch"
 									role="switch"
-									aria-checked={generalDraft.autoScrollStreaming}
+									aria-checked={$generalSettings.autoScrollStreaming}
 									aria-label="Auto-scroll while streaming"
-									onclick={() => (generalDraft.autoScrollStreaming = !generalDraft.autoScrollStreaming)}
+									onclick={() => generalSettingsActions.setAutoScroll(!$generalSettings.autoScrollStreaming)}
 								></button>
 							</div>
 						</div>
@@ -212,7 +196,13 @@
 								<span class="field-hint">Any OpenAI-compatible endpoint.</span>
 							</div>
 							<div class="row-control">
-								<input class="input" type="text" bind:value={aiDraft.baseUrl} placeholder="https://api.openai.com/v1" />
+								<input
+									class="input"
+									type="text"
+									value={$aiSettings.baseUrl}
+									oninput={(e) => aiSettings.update((s) => ({ ...s, baseUrl: e.currentTarget.value }))}
+									placeholder="https://api.openai.com/v1"
+								/>
 							</div>
 							<p class="preview mono">Requests go to {endpoint}</p>
 						</div>
@@ -223,7 +213,14 @@
 								<span class="field-hint">Stored in this browser only.</span>
 							</div>
 							<div class="row-control">
-								<input class="input" type="password" bind:value={aiDraft.apiKey} placeholder="sk-…" autocomplete="off" />
+								<input
+									class="input"
+									type="password"
+									value={$aiSettings.apiKey}
+									oninput={(e) => aiSettings.update((s) => ({ ...s, apiKey: e.currentTarget.value }))}
+									placeholder="sk-…"
+									autocomplete="off"
+								/>
 							</div>
 						</div>
 
@@ -233,16 +230,17 @@
 								<span class="field-hint">The model that answers in the agent panel.</span>
 							</div>
 							<div class="row-control">
-								<input class="input" type="text" bind:value={aiDraft.model} placeholder="gpt-4o-mini" />
+								<input
+									class="input"
+									type="text"
+									value={$aiSettings.model}
+									oninput={(e) => aiSettings.update((s) => ({ ...s, model: e.currentTarget.value }))}
+									placeholder="gpt-4o-mini"
+								/>
 							</div>
 						</div>
 					{/if}
 				</div>
-
-				<footer class="foot">
-					<button class="btn btn--text" onclick={onClose}>Cancel</button>
-					<button class="btn btn--primary" onclick={save}>Save changes</button>
-				</footer>
 			</div>
 		</div>
 	</div>
@@ -261,8 +259,7 @@
 	}
 
 	.dialog {
-		display: grid;
-		grid-template-columns: 172px 1fr;
+		display: flex;
 		width: min(760px, 100%);
 		max-height: min(680px, 100%);
 		background: var(--surface);
@@ -277,8 +274,10 @@
 
 	.nav {
 		display: flex;
+		flex: none;
 		flex-direction: column;
 		gap: 2px;
+		width: 172px;
 		padding: 18px 12px;
 		border-right: 1px solid var(--border);
 	}
@@ -311,8 +310,11 @@
 
 	.main {
 		display: flex;
+		flex: 1 1 auto;
 		flex-direction: column;
+		min-width: 0;
 		min-height: 0;
+		overflow: hidden;
 	}
 
 	.head {
@@ -340,10 +342,11 @@
 	}
 
 	.body {
-		flex: 1;
+		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 4px 20px 8px;
+		overscroll-behavior: contain;
+		padding: 4px 20px 20px;
 	}
 
 	.row {
@@ -390,18 +393,10 @@
 		overflow-wrap: anywhere;
 	}
 
-	.foot {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 8px;
-		padding: 14px 20px;
-		border-top: 1px solid var(--border);
-	}
-
 	@media (max-width: 640px) {
 		.dialog {
-			grid-template-columns: 1fr;
+			flex-direction: column;
+			width: 100%;
 			max-height: 100%;
 			height: 100%;
 			border-radius: 0;
@@ -411,6 +406,7 @@
 			flex-direction: row;
 			align-items: center;
 			gap: 4px;
+			width: auto;
 			padding: 10px 12px;
 			border-right: none;
 			border-bottom: 1px solid var(--border);
