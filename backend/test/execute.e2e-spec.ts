@@ -15,6 +15,15 @@ interface RunResponse {
   kind: string;
 }
 
+interface LanguageResponse {
+  id: string;
+  name: string;
+  runtime: string;
+  filename: string;
+  available: boolean;
+  formatter: boolean;
+}
+
 const hasPython = spawnSync('sh', ['-c', 'command -v python3']).status === 0;
 const itPython = hasPython ? it : it.skip;
 
@@ -39,9 +48,11 @@ describe('Execute (e2e)', () => {
       .get('/execute/languages')
       .expect(200)
       .expect((res) => {
-        const languages = res.body as Array<{ id: string }>;
+        const languages = res.body as LanguageResponse[];
         expect(languages).toHaveLength(6);
         expect(languages[0].id).toBe('typescript');
+        expect(typeof languages[0].available).toBe('boolean');
+        expect(typeof languages[0].formatter).toBe('boolean');
       });
   });
 
@@ -84,10 +95,83 @@ describe('Execute (e2e)', () => {
     expect(body.kind).toBe('runtime');
   });
 
+  itPython('streams the output of a program', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/execute/stream')
+      .send({
+        code: 'import time\nprint("one", flush=True)\ntime.sleep(0.2)\nprint("two", flush=True)',
+        language: 'python',
+      });
+
+    expect(res.status).toBe(200);
+    const events = (res.text ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            type: string;
+            data?: string;
+            result?: RunResponse;
+          },
+      );
+
+    expect(events[0].type).toBe('out');
+    expect(events.map((e) => e.data).join('')).toContain('one');
+    expect(events.map((e) => e.data).join('')).toContain('two');
+
+    const last = events[events.length - 1];
+    expect(last.type).toBe('end');
+    expect(last.result?.kind).toBe('ok');
+  });
+
+  itPython('writes to a running program', async () => {
+    // .then() is what actually sends the request
+    const running = request(app.getHttpServer())
+      .post('/execute/stream')
+      .send({
+        code: 'print(input())',
+        language: 'python',
+        runId: 'e2e-stdin',
+        interactive: true,
+      })
+      .then((res) => res);
+
+    let written = false;
+    for (let attempt = 0; attempt < 20 && !written; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const write = await request(app.getHttpServer())
+        .post('/execute/e2e-stdin/stdin')
+        .send({ data: 'hello\n' });
+      written = (write.body as { written: boolean }).written;
+    }
+
+    expect(written).toBe(true);
+
+    const res = await running;
+    expect(res.text).toContain('hello');
+  });
+
   it('reports an unknown run as not cancelled', () => {
     return request(app.getHttpServer())
       .delete('/execute/run-that-never-started')
       .expect(200)
       .expect({ cancelled: false });
+  });
+
+  it('formats a program', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/format')
+      .send({ code: 'const  x   =1', language: 'typescript' });
+
+    expect(res.status).toBe(201);
+    expect((res.body as { code: string }).code).toBe('const x = 1;\n');
+  });
+
+  it('rejects a format request for an unknown language', () => {
+    return request(app.getHttpServer())
+      .post('/format')
+      .send({ code: 'x', language: 'cobol' })
+      .expect(400);
   });
 });

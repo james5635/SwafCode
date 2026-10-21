@@ -3,4 +3,5 @@ export class ExecuteCodeDto {
   language: 'typescript' | 'python' | 'java' | 'cpp' | 'rust' | 'go';
   stdin?: string;
   runId?: string;
+  interactive?: boolean;
 }

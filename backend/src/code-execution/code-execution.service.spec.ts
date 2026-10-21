@@ -26,6 +26,7 @@ function hasCommand(command: string): boolean {
 
 const hasPython = hasCommand('python3');
 const hasJava = hasCommand('javac');
+const hasPrettier = true;
 
 const itPython = hasPython ? it : it.skip;
 const itJava = hasJava ? it : it.skip;
@@ -68,14 +69,55 @@ describe('CodeExecutionService', () => {
   });
 
   itPython('feeds standard input to the program', async () => {
-    const result = await service.execute(
-      'print(input())',
-      'python',
-      'from stdin\n',
-    );
+    const result = await service.execute('print(input())', 'python', {
+      stdin: 'from stdin\n',
+    });
 
     expect(result.output.trim()).toBe('from stdin');
     expect(result.kind).toBe('ok');
+  });
+
+  itPython('closes standard input when there is none to send', async () => {
+    const result = await service.execute('print(input())', 'python');
+
+    expect(result.kind).toBe('runtime');
+    expect(result.error).toContain('EOFError');
+  });
+
+  itPython('streams output while the program runs', async () => {
+    const chunks: string[] = [];
+    const result = await service.execute(
+      'import time\nprint("one", flush=True)\ntime.sleep(0.2)\nprint("two", flush=True)',
+      'python',
+      { onStdout: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(result.output).toContain('one');
+    expect(result.output).toContain('two');
+    expect(chunks.join('')).toBe(result.output);
+    expect(chunks.length).toBeGreaterThan(0);
+  });
+
+  itPython('writes to a running program', async () => {
+    const running = service.execute(
+      'print(input())\nprint(input())',
+      'python',
+      { interactive: true, runId: 'stdin-run' },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(service.write('stdin-run', 'first\n')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(service.write('stdin-run', 'second\n')).toBe(true);
+
+    const result = await running;
+    expect(result.output).toContain('first');
+    expect(result.output).toContain('second');
+    expect(result.kind).toBe('ok');
+  });
+
+  it('refuses to write to a run that is over', () => {
+    expect(service.write('run-that-never-started', 'x')).toBe(false);
   });
 
   itPython('kills a program that runs past the timeout', async () => {
@@ -102,12 +144,9 @@ describe('CodeExecutionService', () => {
   });
 
   itPython('cancels a running program', async () => {
-    const running = service.execute(
-      'while True: pass',
-      'python',
-      undefined,
-      'run-under-test',
-    );
+    const running = service.execute('while True: pass', 'python', {
+      runId: 'run-under-test',
+    });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(service.cancel('run-under-test')).toBe(true);
@@ -199,4 +238,28 @@ describe('CodeExecutionService', () => {
     expect(limited.args[2]).toBe('python3');
     expect(limited.args[3]).toBe('code.py');
   });
+
+  it('lists the languages and marks the installed ones', async () => {
+    const languages = await service.listLanguages();
+
+    expect(languages).toHaveLength(6);
+    expect(languages[0].id).toBe('typescript');
+    expect(languages.find((l) => l.id === 'java')?.filename).toBe('Main.java');
+    expect(languages.find((l) => l.id === 'python')?.filename).toBe('code.py');
+    expect(languages.find((l) => l.id === 'python')?.available).toBe(hasPython);
+  });
+
+  it('knows which languages it supports', () => {
+    expect(service.isSupported('python')).toBe(true);
+    expect(service.isSupported('cobol')).toBe(false);
+  });
+
+  it(
+    hasPrettier ? 'formats TypeScript with prettier' : 'skips prettier',
+    async () => {
+      const code = await service.format('const x   =    1\n', 'typescript');
+
+      expect(code).toBe('const x = 1;\n');
+    },
+  );
 });

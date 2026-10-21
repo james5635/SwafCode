@@ -2,6 +2,7 @@
 	type IconName =
 		| 'settings'
 		| 'copy'
+		| 'link'
 		| 'trash'
 		| 'stop'
 		| 'agent'
@@ -17,6 +18,8 @@
 		settings:
 			'<path d="M4 8h9M19 8h1"/><path d="M4 16h3M13 16h7"/><circle cx="15.5" cy="8" r="2.5"/><circle cx="9.5" cy="16" r="2.5"/>',
 		copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1"/>',
+		link:
+			'<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7l-1.3 1.3"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.3-1.3"/>',
 		trash:
 			'<path d="M4 7h16"/><path d="M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2"/><path d="M6.5 7l.9 12.1a1 1 0 0 0 1 .9h7.2a1 1 0 0 0 1-.9L17.5 7"/><path d="M10.5 11v5M13.5 11v5"/>',
 		stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',

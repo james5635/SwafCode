@@ -355,6 +355,15 @@ svg {
 	color: var(--text);
 }
 
+/* A language whose runtime is missing on the server. */
+.tab.unavailable {
+	color: var(--faint);
+}
+
+.tab.unavailable:hover {
+	color: var(--muted);
+}
+
 .tab[aria-selected='true'] {
 	color: var(--text);
 }

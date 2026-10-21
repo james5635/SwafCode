@@ -5,12 +5,16 @@ A web-based code execution playground supporting multiple programming languages.
 ## Features
 
 - **6 Languages Supported**: TypeScript, Python, Java, C++, Rust, Go
+- **Live Output**: The console fills as the program writes, not when it ends
+- **Live Input**: Send lines to a program that is still running
 - **Real-time Execution**: Run code with a 10s timeout, stop it early
 - **Exit Status**: Every run reports its exit code, how long it took and whether it timed out
 - **Bounded Runs**: Programs get 256 MB of memory and are killed as a group, so nothing outlives its run
 - **Syntax Highlighting**: CodeMirror 6 with language-specific highlighting
 - **Language Tabs**: Populated from the backend, with the runtime shown on hover
 - **Example Programs**: the same program in all six languages, one click away
+- **Format**: prettier, black, clang-format, rustfmt and gofmt, when they are installed
+- **Share Links**: a link carries the program, so it can be sent to someone else
 - **Console**: stdout and stderr in one panel, with a standard-input tab
 - **AI Agent**: reads, rewrites and runs the program in the editor
 - **7 Editor Themes**: each theme re-skins the whole interface
@@ -102,9 +106,12 @@ task preview
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/execute/languages` | List supported languages |
+| GET | `/execute/languages` | List supported languages and what is installed |
 | POST | `/execute` | Execute code |
+| POST | `/execute/stream` | Execute code, streaming the output |
+| POST | `/execute/:runId/stdin` | Send text to a running program |
 | DELETE | `/execute/:runId` | Stop a running program |
+| POST | `/format` | Format a program |
 
 ### Execute Code
 
@@ -120,12 +127,14 @@ curl -X POST http://localhost:3000/execute \
   "code": "string",
   "language": "typescript" | "python" | "java" | "cpp" | "rust" | "go",
   "stdin": "string",
-  "runId": "string"
+  "runId": "string",
+  "interactive": false
 }
 ```
 
 `runId` is optional. Send one and the run can be stopped with
-`DELETE /execute/:runId` while it is still going.
+`DELETE /execute/:runId` while it is still going. `interactive` keeps the
+program's input open, so lines can be sent to it while it runs.
 
 **Response:**
 ```json
@@ -150,6 +159,46 @@ curl -X POST http://localhost:3000/execute \
 | `spawn` | The runtime is not installed on the server |
 | `timeout` | The program was killed after the time limit |
 | `cancelled` | The program was stopped from the interface |
+
+### Stream a Run
+
+`POST /execute/stream` takes the same request and answers with newline
+delimited events, so the output can be shown while the program runs:
+
+```
+{"type":"out","data":"first line\n"}
+{"type":"err","data":"a warning\n"}
+{"type":"end","result":{"output":"…","exitCode":0,"kind":"ok", …}}
+```
+
+### Send Input to a Running Program
+
+```bash
+curl -X POST http://localhost:3000/execute/<runId>/stdin \
+  -H "Content-Type: application/json" \
+  -d '{"data": "hello\n"}'
+```
+
+```json
+{ "written": true }
+```
+
+### Format a Program
+
+```bash
+curl -X POST http://localhost:3000/format \
+  -H "Content-Type: application/json" \
+  -d '{"code": "const  x=1", "language": "typescript"}'
+```
+
+```json
+{ "code": "const x = 1;\n" }
+```
+
+Each language is formatted with the tool that fits it: prettier for
+TypeScript, black for Python, clang-format for Java and C++, rustfmt for Rust
+and gofmt for Go. A language whose formatter is not installed answers with an
+error.
 
 ### Stop a Run
 
@@ -217,6 +266,9 @@ task clean               # Remove build artifacts
 A run that is stopped from the interface is killed as a group, so a program
 cannot leave children behind.
 
+`POST /execute/stream` does the same, but writes every chunk of output as it
+arrives, so the console fills while the program runs.
+
 ### Frontend State
 
 - Language list fetched from `/execute/languages` on load, with a built-in fallback
@@ -225,6 +277,7 @@ cannot leave children behind.
 - The editor never opens on an empty program: it falls back to the language's example
 - The `Example` action in the editor header restores that program (it asks first if the program was edited)
 - Console shows stdout and stderr together, with standard input on its own tab
+- A link in the address bar (`#lang=…&code=…`) carries the program
 - Editor preferences (theme, font size, line numbers) live in the general-settings store
 - The interface is one ground divided by 1px rules; every selection is a 1px accent line
 

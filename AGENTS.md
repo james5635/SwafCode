@@ -55,7 +55,7 @@ SwafCode/
 
 ## Backend: Code Execution Flow
 
-1. `POST /execute` receives `{ code, language, stdin?, runId? }`
+1. `POST /execute` receives `{ code, language, stdin?, runId?, interactive? }`
 2. Service creates a temp dir, writes code to language-specific file
 3. Checks the runtime is installed; a missing one is a `spawn` error
 4. Compiled languages (Java, C++, Rust, Go): compile asynchronously, 45s timeout
@@ -66,9 +66,23 @@ SwafCode/
 
 `kind` is one of `ok`, `runtime`, `compile`, `spawn`, `timeout`, `cancelled`.
 
+**Endpoints**:
+
+| Method | Path | What it does |
+|--------|------|--------------|
+| GET | `/execute/languages` | The languages, with `available` and `formatter` flags |
+| POST | `/execute` | Run a program, answer when it ends |
+| POST | `/execute/stream` | Run a program, stream the output as newline-delimited events |
+| POST | `/execute/:runId/stdin` | Send text to a running program |
+| DELETE | `/execute/:runId` | Stop a running program |
+| POST | `/format` | Format a program with the tool that fits its language |
+
 **Stopping a run**: `DELETE /execute/:runId` kills the process group and the
 run resolves with `kind: 'cancelled'`. The client sends a `runId` with the
 request so it can stop the run.
+
+**Live input**: with `interactive: true` the program's input stays open and
+`POST /execute/:runId/stdin` writes to it.
 
 **Memory cap**: Node gets `--max-old-space-size`, the JVM gets `-Xmx`, Go gets
 `GOMEMLIMIT`, everything else runs under `ulimit -v`.
@@ -90,6 +104,12 @@ request so it can stop the run.
   what kind of run it was (`compile error`, `timed out`, `stopped`, ...)
 - `Stop` asks the server to kill the run; the request resolves with the
   cancelled result instead of being aborted
+- The console follows the output while it arrives, unless the reader scrolled up
+- The Input tab has a `Live input` switch: with it on, the program keeps
+  reading and each line typed is sent to it while it runs
+- A link in the address bar (`#lang=…&code=…`) carries the program; the copy
+  link action in the editor header makes one
+- The vite dev server proxies `/execute` and `/format` to the backend
 
 ### Design rules
 
@@ -103,28 +123,28 @@ request so it can stop the run.
 ## Adding a New Language
 
 1. **Backend** (`code-execution.service.ts`):
-   - Add entry to `languages` record with `ext`, optional `filename`, `memory` and `run`
+   - Add entry to `languages` record with `id`, `name`, `runtime`, `ext`, optional
+     `filename`, `tools`, `memory`, `format` and `run`
+   - `tools` lists the commands that must exist for the language to be offered
    - `memory` picks the cap: `node`, `jvm`, `go` or `rlimit`
+   - `format` is optional: a prettier-style library or a command that reads stdin
    - Compiled: implement `compile` (returns `{command, args, execPath}`) and `run`
    - Interpreted: only `run` needed
 
-2. **Backend** (`code-execution.controller.ts`):
-   - Add to the `LANGUAGES` array: `{ id, name, runtime, filename }`
+2. **Backend** (`dto/execute-code.dto.ts` and `dto/format-code.dto.ts`):
+   - Add to the union type
 
-3. **Backend** (`dto/execute-code.dto.ts`):
-   - Add to union type
-
-4. **Frontend** (`CodeEditor.svelte`):
+3. **Frontend** (`CodeEditor.svelte`):
    - Import language from `@codemirror/lang-*`
    - Add case in `getLangExtension()`
    - Add the syntax palette to `swafHighlightStyle` (the built-in theme)
 
-5. **Frontend** (`+page.svelte`):
+4. **Frontend** (`+page.svelte`):
    - Add to `FALLBACK_LANGUAGES` and to `DEFAULT_CODE`
    - `DEFAULT_CODE` is the example program for that language; the `Example` action
      in the editor header restores it, so keep it runnable and short
 
-6. **Install CodeMirror language package** if needed:
+5. **Install CodeMirror language package** if needed:
    ```bash
    cd frontend && npm install @codemirror/lang-<name>
    ```

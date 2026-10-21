@@ -11,6 +11,9 @@
 		durationMs = 0,
 		compileMs = 0,
 		kind = null,
+		running = false,
+		liveInput = $bindable(false),
+		onSendInput = () => {},
 		shortcut = 'Ctrl ⏎'
 	}: {
 		stdout?: string;
@@ -22,8 +25,13 @@
 		durationMs?: number;
 		compileMs?: number;
 		kind?: string | null;
+		running?: boolean;
+		liveInput?: boolean;
+		onSendInput?: (data: string) => void;
 		shortcut?: string;
 	} = $props();
+
+	let body: HTMLDivElement | undefined = $state();
 
 	function copyConsole() {
 		const text = [stdout, stderr].filter(Boolean).join('\n');
@@ -58,6 +66,21 @@
 	let statusBad = $derived(
 		kind === 'compile' || kind === 'spawn' || kind === 'timeout' || kind === 'runtime'
 	);
+
+	// Follow the output while it arrives, unless the reader scrolled up.
+	$effect(() => {
+		if (!body || (!stdout && !stderr)) return;
+		const distance = body.scrollHeight - body.scrollTop - body.clientHeight;
+		if (distance < 80) body.scrollTop = body.scrollHeight;
+	});
+
+	function onStdinKeydown(e: KeyboardEvent) {
+		if (!liveInput || !running || e.key !== 'Enter' || e.shiftKey) return;
+		e.preventDefault();
+		const data = `${stdin}\n`;
+		stdin = '';
+		onSendInput(data);
+	}
 </script>
 
 <section class="panel console">
@@ -93,7 +116,7 @@
 		</div>
 	</div>
 
-	<div class="panel-body console-body">
+	<div class="panel-body console-body" bind:this={body}>
 		{#if tab === 'output'}
 			{#if notice}
 				<p class="notice">{notice}</p>
@@ -122,14 +145,37 @@
 		{:else}
 			<div class="input-view">
 				<label class="field-label" for="stdin">Standard input</label>
-				<p class="field-hint">Piped to the program when it runs.</p>
+				<p class="field-hint">
+					{liveInput
+						? 'Sent to the program while it runs.'
+						: 'Piped to the program when it runs.'}
+				</p>
 				<textarea
 					id="stdin"
 					class="input stdin"
 					bind:value={stdin}
-					placeholder="The program reads from stdin…"
+					onkeydown={onStdinKeydown}
+					placeholder={liveInput
+						? 'Type and press Enter to send a line…'
+						: 'The program reads from stdin…'}
 					spellcheck="false"
 				></textarea>
+
+				<div class="live-row">
+					<button
+						class="switch"
+						role="switch"
+						aria-checked={liveInput}
+						aria-label="Live input"
+						onclick={() => (liveInput = !liveInput)}
+					></button>
+					<div class="live-copy">
+						<span class="field-label">Live input</span>
+						<span class="field-hint">
+							The program keeps reading while it runs.
+						</span>
+					</div>
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -211,8 +257,28 @@
 	}
 
 	.stdin {
-		flex: 1;
-		min-height: 90px;
+		flex: 1 1 auto;
+		min-height: 48px;
 		margin-top: 4px;
+	}
+
+	.live-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		flex: none;
+		margin-top: 10px;
+		padding-top: 12px;
+		border-top: 1px solid var(--rule);
+	}
+
+	.live-row .switch {
+		margin-top: 2px;
+	}
+
+	.live-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
 	}
 </style>

@@ -9,9 +9,17 @@
 	import { untrack } from 'svelte';
 
 	const API = '/execute';
+	const FORMAT_API = '/format';
 	const STORAGE_KEY = 'swafcode:state';
 
-	type Language = { id: string; name: string; runtime: string; filename: string };
+	type Language = {
+		id: string;
+		name: string;
+		runtime: string;
+		filename: string;
+		available?: boolean;
+		formatter?: boolean;
+	};
 
 	// The same list the backend serves, so the interface is complete before
 	// the first request lands.
@@ -184,6 +192,7 @@ func main() {
 	let durationMs = $state(0);
 	let compileMs = $state(0);
 	let runKind = $state<string | null>(null);
+	let liveInput = $state(false);
 
 	let abortController: AbortController | null = null;
 	let activeRunId: string | null = null;
@@ -224,9 +233,17 @@ func main() {
 
 	loadState();
 
+	// A link can carry a program, so it can be sent to someone else.
+	const shared = readSharedState();
+	if (shared.language && FALLBACK_LANGUAGES.some((l) => l.id === shared.language)) {
+		selectedLang = shared.language;
+	}
+
 	// The editor opens on the program that was last open for this language,
 	// and never on an empty one: an empty program is not a program.
-	let code = $state(untrack(() => codeByLang[selectedLang] || DEFAULT_CODE[selectedLang] || ''));
+	let code = $state(
+		untrack(() => shared.code ?? codeByLang[selectedLang] ?? DEFAULT_CODE[selectedLang] ?? '')
+	);
 
 	function saveState() {
 		if (typeof localStorage === 'undefined') return;
@@ -267,6 +284,20 @@ func main() {
 	}
 
 	$effect(() => {
+		if (typeof window === 'undefined') return;
+		// A link pasted into the address bar loads its program.
+		const onHashChange = () => {
+			const next = readSharedState();
+			if (next.language && FALLBACK_LANGUAGES.some((l) => l.id === next.language)) {
+				selectedLang = next.language;
+			}
+			if (next.code !== undefined) code = next.code;
+		};
+		window.addEventListener('hashchange', onHashChange);
+		return () => window.removeEventListener('hashchange', onHashChange);
+	});
+
+	$effect(() => {
 		fetch(`${API}/languages`)
 			.then((r) => (r.ok ? r.json() : null))
 			.then((data: Language[] | null) => {
@@ -285,8 +316,9 @@ func main() {
 		saveState();
 	});
 
-	async function runCode() {
+	async function runCode(options: { live?: boolean } = {}) {
 		if (!code.trim() || running) return;
+		const useLive = options.live ?? liveInput;
 		const runId = newRunId();
 		activeRunId = runId;
 		running = true;
@@ -297,23 +329,29 @@ func main() {
 		durationMs = 0;
 		compileMs = 0;
 		runKind = null;
-		consoleTab = 'output';
+		// With live input on, the reader wants to type, not to watch.
+		consoleTab = useLive ? 'input' : 'output';
 		abortController = new AbortController();
 
 		try {
-			const res = await fetch(API, {
+			const res = await fetch(`${API}/stream`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ code, language: selectedLang, stdin, runId }),
+				body: JSON.stringify({
+					code,
+					language: selectedLang,
+					stdin: useLive ? undefined : stdin,
+					runId,
+					interactive: useLive
+				}),
 				signal: abortController.signal
 			});
-			const data = await res.json();
-			stdout = data.output ?? '';
-			stderr = data.error ?? '';
-			exitCode = data.exitCode ?? null;
-			durationMs = data.durationMs ?? 0;
-			compileMs = data.compileMs ?? 0;
-			runKind = data.kind ?? null;
+
+			if (!res.ok || !res.body) {
+				throw new Error(`Request failed with status ${res.status}`);
+			}
+
+			await readStream(res.body);
 		} catch (err: any) {
 			if (err?.name === 'AbortError') {
 				notice = 'Run stopped before it finished.';
@@ -331,6 +369,40 @@ func main() {
 		}
 	}
 
+	// Reads the newline-delimited events the server streams back: the output
+	// as it is produced, and the result of the run at the end.
+	async function readStream(body: ReadableStream<Uint8Array>) {
+		const reader = body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+
+			let index = buffer.indexOf('\n');
+			while (index >= 0) {
+				const line = buffer.slice(0, index).trim();
+				buffer = buffer.slice(index + 1);
+				index = buffer.indexOf('\n');
+				if (!line) continue;
+
+				const event = JSON.parse(line);
+				if (event.type === 'out') stdout += event.data;
+				else if (event.type === 'err') stderr += event.data;
+				else if (event.type === 'end') {
+					exitCode = event.result.exitCode ?? null;
+					durationMs = event.result.durationMs ?? 0;
+					compileMs = event.result.compileMs ?? 0;
+					runKind = event.result.kind ?? null;
+				} else if (event.type === 'error') {
+					stderr = event.message;
+				}
+			}
+		}
+	}
+
 	// Asks the server to kill the running program. The request resolves with
 	// a cancelled result; the abort is only the fallback for a dead server.
 	function stopRun() {
@@ -338,6 +410,17 @@ func main() {
 		if (!id) return;
 		fetch(`${API}/${id}`, { method: 'DELETE' }).catch(() => {});
 		stopFallback = setTimeout(() => abortController?.abort(), 2000);
+	}
+
+	// Sends a line to a program that is still running.
+	function sendInput(data: string) {
+		const id = activeRunId;
+		if (!id) return;
+		fetch(`${API}/${id}/stdin`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ data })
+		}).catch(() => {});
 	}
 
 	function newRunId(): string {
@@ -363,8 +446,73 @@ func main() {
 	}
 
 	async function runAndGetOutput(): Promise<string> {
-		await runCode();
+		await runCode({ live: false });
 		return getOutput();
+	}
+
+	// A link that carries the program, so it can be sent to someone else.
+	function shareLink(): string {
+		const params = new URLSearchParams();
+		params.set('lang', selectedLang);
+		params.set('code', encodeCode(code));
+		return `${location.origin}${location.pathname}#${params.toString()}`;
+	}
+
+	async function copyLink() {
+		const link = shareLink();
+		try {
+			await navigator.clipboard.writeText(link);
+			notice = 'Link copied to the clipboard.';
+		} catch {
+			notice = link;
+		}
+	}
+
+	function encodeCode(source: string): string {
+		const bytes = new TextEncoder().encode(source);
+		let binary = '';
+		for (const byte of bytes) binary += String.fromCharCode(byte);
+		return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	}
+
+	function decodeCode(encoded: string): string {
+		const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
+		const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
+		const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+		return new TextDecoder().decode(bytes);
+	}
+
+	// Reads a shared program out of the address bar.
+	function readSharedState(): { language?: string; code?: string } {
+		if (typeof window === 'undefined') return {};
+		const params = new URLSearchParams(window.location.hash.slice(1));
+		const encoded = params.get('code');
+		if (!encoded) return {};
+		const language = params.get('lang') ?? undefined;
+		try {
+			return { language, code: decodeCode(encoded) };
+		} catch {
+			// a broken link keeps the program that is already open
+			return { language };
+		}
+	}
+
+	async function formatCode() {
+		try {
+			const res = await fetch(FORMAT_API, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ code, language: selectedLang })
+			});
+			const data = await res.json();
+			if (data.code) {
+				code = data.code;
+			} else {
+				notice = data.message ?? 'Formatting failed.';
+			}
+		} catch (err: any) {
+			notice = `Formatting failed: ${err?.message ?? 'unknown error'}`;
+		}
 	}
 
 	function startResize(event: PointerEvent) {
@@ -424,9 +572,12 @@ func main() {
 			{#each languages as lang (lang.id)}
 				<button
 					class="tab"
+					class:unavailable={lang.available === false}
 					role="tab"
 					aria-selected={selectedLang === lang.id}
-					title="Runs on {lang.runtime}"
+					title={lang.available === false
+						? `${lang.runtime} is not installed on the server`
+						: `Runs on ${lang.runtime}`}
 					onclick={() => selectLanguage(lang.id)}
 				>
 					{lang.name}
@@ -458,7 +609,7 @@ func main() {
 					Stop
 				</button>
 			{/if}
-			<button class="btn btn--primary run" onclick={runCode} disabled={running}>
+			<button class="btn btn--primary run" onclick={() => runCode()} disabled={running}>
 				{#if running}
 					<span class="spinner" aria-hidden="true"></span>
 				{/if}
@@ -481,6 +632,23 @@ func main() {
 							onclick={requestExample}
 						>
 							Example
+						</button>
+						{#if activeLanguage.formatter !== false}
+							<button
+								class="btn btn--text example-btn"
+								title="Format the program for {activeLanguage.name}"
+								onclick={formatCode}
+							>
+								Format
+							</button>
+						{/if}
+						<button
+							class="icon-btn"
+							title="Copy a link to this program"
+							aria-label="Copy a link to this program"
+							onclick={copyLink}
+						>
+							<Icon name="link" />
 						</button>
 						<button
 							class="icon-btn"
@@ -539,10 +707,13 @@ func main() {
 				bind:stdin
 				bind:tab={consoleTab}
 				bind:notice
+				bind:liveInput
 				{exitCode}
 				{durationMs}
 				{compileMs}
 				kind={runKind}
+				{running}
+				onSendInput={sendInput}
 				shortcut={runShortcut}
 			/>
 		</div>

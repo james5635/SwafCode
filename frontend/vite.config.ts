@@ -19,7 +19,8 @@ export default defineConfig({
 	],
 	server: {
 		proxy: {
-			'/execute': 'http://localhost:3000'
+			'/execute': 'http://localhost:3000',
+			'/format': 'http://localhost:3000'
 		}
 	}
 });
