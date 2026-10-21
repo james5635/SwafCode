@@ -24,6 +24,8 @@ task clean            # Remove build artifacts
 
 > **Note for agents**: The dev servers are started manually by the developer. Do not run `task dev`, `task dev:backend`, or `task dev:frontend` yourself. Use `task build`, `task check`, `task lint`, `task test` for verification instead.
 
+> **Note for agents**: **Do not commit.** When a task is done, leave the changes in the working tree and report what was done. The developer reviews the code first, and then either asks you to commit or commits it themselves.
+
 ## Architecture
 
 ```
@@ -170,6 +172,15 @@ request so it can stop the run.
    cd frontend && npm install @codemirror/lang-<name>
    ```
 
+## Git Workflow
+
+- **Never commit on your own.** Finish the task, leave the changes in the
+  working tree, and say what you did and how you verified it.
+- The developer reviews the code first. After the review they either ask you
+  to commit or commit it themselves.
+- When the developer does ask for a commit, stage with `git add -A` and write
+  a message that says what changed and why, in the style of the existing log.
+
 ## Code Style
 
 - **Backend**: ESLint + Prettier (run `task lint` / `task format`)
@@ -183,6 +194,13 @@ request so it can stop the run.
 task test       # Jest unit tests (backend)
 task test:e2e   # Jest e2e tests (backend)
 ```
+
+The e2e tests need MongoDB: they run against `swafcode_test` on
+`MONGODB_TEST_URI` (default `mongodb://localhost:27017/swafcode_test`). Start
+it with `task mongo` or `docker compose up mongodb`.
+
+The Jest scripts run with `--experimental-vm-modules`, because the MongoDB
+driver loads `os` through a dynamic import that Jest's sandbox blocks.
 
 ## Common Issues
 

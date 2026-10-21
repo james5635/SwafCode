@@ -200,6 +200,7 @@ func main() {
 
 	let signedIn = $derived(Boolean($auth.accessToken));
 	let accountEmail = $derived($auth.user?.email ?? '');
+	let accountInitial = $derived(accountEmail.charAt(0).toUpperCase());
 
 	let abortController: AbortController | null = null;
 	let activeRunId: string | null = null;
@@ -628,10 +629,11 @@ func main() {
 			{#if signedIn}
 				<button
 					class="account"
-					title={accountEmail}
+					title="{accountEmail} — sign out"
+					aria-label="Sign out of {accountEmail}"
 					onclick={handleSignOut}
 				>
-					<span class="account-name">{accountEmail}</span>
+					<span class="avatar" aria-hidden="true">{accountInitial}</span>
 					<span class="account-action">Sign out</span>
 				</button>
 			{:else}
@@ -850,11 +852,10 @@ func main() {
 
 	.account {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
 		height: var(--control-h);
-		max-width: 220px;
-		padding: 0 10px;
+		padding: 0 10px 0 4px;
 		border-radius: var(--radius-chip);
 		transition: background-color 0.12s ease;
 	}
@@ -863,18 +864,30 @@ func main() {
 		background: var(--raised);
 	}
 
-	.account-name {
+	.avatar {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		flex: none;
+		border-radius: 999px;
+		background: var(--raised);
+		color: var(--text);
 		font-size: var(--fs-small);
-		color: var(--muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		font-weight: 600;
+		line-height: 1;
 	}
 
 	.account-action {
 		font-size: var(--fs-small);
-		color: var(--text);
+		color: var(--muted);
 		white-space: nowrap;
+		transition: color 0.12s ease;
+	}
+
+	.account:hover .account-action {
+		color: var(--text);
 	}
 
 	.stop {
