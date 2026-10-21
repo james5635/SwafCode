@@ -5,7 +5,9 @@ A web-based code execution playground supporting multiple programming languages.
 ## Features
 
 - **6 Languages Supported**: TypeScript, Python, Java, C++, Rust, Go
-- **Real-time Execution**: Run code with 10s timeout, stop it early
+- **Real-time Execution**: Run code with a 10s timeout, stop it early
+- **Exit Status**: Every run reports its exit code, how long it took and whether it timed out
+- **Bounded Runs**: Programs get 256 MB of memory and are killed as a group, so nothing outlives its run
 - **Syntax Highlighting**: CodeMirror 6 with language-specific highlighting
 - **Language Tabs**: Populated from the backend, with the runtime shown on hover
 - **Example Programs**: the same program in all six languages, one click away
@@ -102,6 +104,7 @@ task preview
 |--------|----------|-------------|
 | GET | `/execute/languages` | List supported languages |
 | POST | `/execute` | Execute code |
+| DELETE | `/execute/:runId` | Stop a running program |
 
 ### Execute Code
 
@@ -115,17 +118,58 @@ curl -X POST http://localhost:3000/execute \
 ```json
 {
   "code": "string",
-  "language": "typescript" | "python" | "java" | "cpp" | "rust" | "go"
+  "language": "typescript" | "python" | "java" | "cpp" | "rust" | "go",
+  "stdin": "string",
+  "runId": "string"
 }
 ```
+
+`runId` is optional. Send one and the run can be stopped with
+`DELETE /execute/:runId` while it is still going.
 
 **Response:**
 ```json
 {
   "output": "string",
-  "error": "string"
+  "error": "string",
+  "exitCode": 0,
+  "durationMs": 12,
+  "compileMs": 0,
+  "timedOut": false,
+  "kind": "ok"
 }
 ```
+
+`kind` says what happened:
+
+| Kind | Meaning |
+|------|---------|
+| `ok` | The program ran and exited with 0 |
+| `runtime` | The program ran and exited with something else |
+| `compile` | The compiler rejected the program |
+| `spawn` | The runtime is not installed on the server |
+| `timeout` | The program was killed after the time limit |
+| `cancelled` | The program was stopped from the interface |
+
+### Stop a Run
+
+```bash
+curl -X DELETE http://localhost:3000/execute/<runId>
+```
+
+```json
+{ "cancelled": true }
+```
+
+The run resolves with `kind: "cancelled"`. The answer is `false` when the run
+had already finished.
+
+### Configuration
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SWAFCODE_RUN_TIMEOUT_MS` | `10000` | How long a program may run |
+| `SWAFCODE_COMPILE_TIMEOUT_MS` | `45000` | How long a compiler may run |
 
 ## Language Details
 
@@ -136,7 +180,7 @@ curl -X POST http://localhost:3000/execute \
 | Java | `java` | `javac` | `Main.java` |
 | C++ | `cpp` | `g++` | `code.cpp` |
 | Rust | `rust` | `rustc` | `code.rs` |
-| Go | `go` | `go run` | `code.go` |
+| Go | `go` | `go build` | `code.go` |
 
 ## Task Commands
 
@@ -161,13 +205,17 @@ task clean               # Remove build artifacts
 
 ### Backend Execution Flow
 
-1. Receive code + language via POST `/execute`
-2. Create temp directory, write code to language-specific file
-3. For compiled languages (Java, C++, Rust): compile with timeout
-4. Execute compiled binary or interpreted script
-5. Capture stdout/stderr with 10s timeout, 100KB output limit
-6. Cleanup temp files
-7. Return output/error JSON
+1. Receive code + language (+ optional runId) via POST `/execute`
+2. Create a temp directory, write the code to a language-specific file
+3. Check the runtime is installed on the server
+4. For compiled languages (Java, C++, Rust, Go): compile asynchronously, 45s timeout
+5. Run the program in its own process group, under a 256 MB memory cap, 10s timeout
+6. Capture stdout/stderr (100KB limit per stream)
+7. Remove the temp directory, compiled artifacts and all
+8. Return the output, the exit status, the timings and the kind of the run
+
+A run that is stopped from the interface is killed as a group, so a program
+cannot leave children behind.
 
 ### Frontend State
 

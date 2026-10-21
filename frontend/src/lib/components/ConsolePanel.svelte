@@ -7,6 +7,10 @@
 		stdin = $bindable(''),
 		notice = $bindable(''),
 		tab = $bindable('output'),
+		exitCode = null,
+		durationMs = 0,
+		compileMs = 0,
+		kind = null,
 		shortcut = 'Ctrl ⏎'
 	}: {
 		stdout?: string;
@@ -14,6 +18,10 @@
 		stdin?: string;
 		notice?: string;
 		tab?: 'output' | 'input';
+		exitCode?: number | null;
+		durationMs?: number;
+		compileMs?: number;
+		kind?: string | null;
 		shortcut?: string;
 	} = $props();
 
@@ -26,6 +34,30 @@
 		stdout = '';
 		stderr = '';
 	}
+
+	function formatDuration(ms: number): string {
+		if (ms < 1000) return `${Math.round(ms)} ms`;
+		return `${(ms / 1000).toFixed(1)} s`;
+	}
+
+	let status = $derived.by(() => {
+		if (!kind) return '';
+		const parts: string[] = [];
+		if (kind === 'compile') parts.push('compile error');
+		else if (kind === 'spawn') parts.push('runtime unavailable');
+		else if (kind === 'timeout') parts.push('timed out');
+		else if (kind === 'cancelled') parts.push('stopped');
+		else {
+			parts.push(`exit ${exitCode ?? '—'}`);
+			if (durationMs) parts.push(formatDuration(durationMs));
+		}
+		if (compileMs) parts.push(`compiled ${formatDuration(compileMs)}`);
+		return parts.join(' · ');
+	});
+
+	let statusBad = $derived(
+		kind === 'compile' || kind === 'spawn' || kind === 'timeout' || kind === 'runtime'
+	);
 </script>
 
 <section class="panel console">
@@ -65,6 +97,9 @@
 		{#if tab === 'output'}
 			{#if notice}
 				<p class="notice">{notice}</p>
+			{/if}
+			{#if status}
+				<p class="status" class:status--bad={statusBad}>{status}</p>
 			{/if}
 			{#if stdout || stderr}
 				{#if stdout}
@@ -115,6 +150,17 @@
 		margin-bottom: 12px;
 		font-size: var(--fs-small);
 		color: var(--muted);
+	}
+
+	.status {
+		margin-bottom: 12px;
+		font-family: var(--font-code);
+		font-size: var(--fs-micro);
+		color: var(--muted);
+	}
+
+	.status--bad {
+		color: var(--negative);
 	}
 
 	.stream + .stream {

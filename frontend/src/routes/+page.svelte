@@ -180,7 +180,14 @@ func main() {
 	let settingsOpen = $state(false);
 	let confirmExample = $state(false);
 
+	let exitCode = $state<number | null>(null);
+	let durationMs = $state(0);
+	let compileMs = $state(0);
+	let runKind = $state<string | null>(null);
+
 	let abortController: AbortController | null = null;
+	let activeRunId: string | null = null;
+	let stopFallback: ReturnType<typeof setTimeout> | null = null;
 
 	let fontSize = $derived($generalSettings.fontSize);
 	let showLineNumbers = $derived($generalSettings.lineNumbers);
@@ -280,10 +287,16 @@ func main() {
 
 	async function runCode() {
 		if (!code.trim() || running) return;
+		const runId = newRunId();
+		activeRunId = runId;
 		running = true;
 		stdout = '';
 		stderr = '';
 		notice = '';
+		exitCode = null;
+		durationMs = 0;
+		compileMs = 0;
+		runKind = null;
 		consoleTab = 'output';
 		abortController = new AbortController();
 
@@ -291,12 +304,16 @@ func main() {
 			const res = await fetch(API, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ code, language: selectedLang, stdin }),
+				body: JSON.stringify({ code, language: selectedLang, stdin, runId }),
 				signal: abortController.signal
 			});
 			const data = await res.json();
 			stdout = data.output ?? '';
 			stderr = data.error ?? '';
+			exitCode = data.exitCode ?? null;
+			durationMs = data.durationMs ?? 0;
+			compileMs = data.compileMs ?? 0;
+			runKind = data.kind ?? null;
 		} catch (err: any) {
 			if (err?.name === 'AbortError') {
 				notice = 'Run stopped before it finished.';
@@ -306,11 +323,28 @@ func main() {
 		} finally {
 			running = false;
 			abortController = null;
+			activeRunId = null;
+			if (stopFallback) {
+				clearTimeout(stopFallback);
+				stopFallback = null;
+			}
 		}
 	}
 
+	// Asks the server to kill the running program. The request resolves with
+	// a cancelled result; the abort is only the fallback for a dead server.
 	function stopRun() {
-		abortController?.abort();
+		const id = activeRunId;
+		if (!id) return;
+		fetch(`${API}/${id}`, { method: 'DELETE' }).catch(() => {});
+		stopFallback = setTimeout(() => abortController?.abort(), 2000);
+	}
+
+	function newRunId(): string {
+		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+			return crypto.randomUUID();
+		}
+		return `run-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	}
 
 	function copyCode() {
@@ -319,6 +353,10 @@ func main() {
 
 	function getOutput(): string {
 		const parts: string[] = [];
+		if (runKind && runKind !== 'ok') {
+			const code = exitCode !== null ? ` (exit ${exitCode})` : '';
+			parts.push(`status: ${runKind}${code}`);
+		}
 		if (stdout) parts.push(`stdout:\n${stdout}`);
 		if (stderr) parts.push(`stderr:\n${stderr}`);
 		return parts.join('\n\n') || '(no output yet)';
@@ -501,6 +539,10 @@ func main() {
 				bind:stdin
 				bind:tab={consoleTab}
 				bind:notice
+				{exitCode}
+				{durationMs}
+				{compileMs}
+				kind={runKind}
 				shortcut={runShortcut}
 			/>
 		</div>

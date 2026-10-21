@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { CodeExecutionService } from './code-execution.service';
 import { ExecuteCodeDto } from './dto/execute-code.dto';
 
@@ -33,6 +41,16 @@ export class CodeExecutionController {
       );
     }
 
-    return this.codeExecutionService.execute(dto.code, dto.language, dto.stdin);
+    return this.codeExecutionService.execute(
+      dto.code,
+      dto.language,
+      dto.stdin,
+      dto.runId,
+    );
+  }
+
+  @Delete(':runId')
+  cancel(@Param('runId') runId: string) {
+    return { cancelled: this.codeExecutionService.cancel(runId) };
   }
 }

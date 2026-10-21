@@ -55,15 +55,25 @@ SwafCode/
 
 ## Backend: Code Execution Flow
 
-1. `POST /execute` receives `{ code, language }`
-2. Service creates temp dir, writes code to language-specific file
-3. Compiled languages (Java, C++, Rust): compile with 10s timeout
-4. Execute binary or run interpreted (TypeScript via `tsx`, Python via `python3`, Go via `go run`)
-5. Capture stdout/stderr (100KB limit, 10s timeout)
-6. Cleanup temp files
-7. Return `{ output, error }`
+1. `POST /execute` receives `{ code, language, stdin?, runId? }`
+2. Service creates a temp dir, writes code to language-specific file
+3. Checks the runtime is installed; a missing one is a `spawn` error
+4. Compiled languages (Java, C++, Rust, Go): compile asynchronously, 45s timeout
+5. Run the program in its own process group, under a 256 MB memory cap, 10s timeout
+6. Capture stdout/stderr (100KB limit per stream)
+7. Remove the temp dir and every compiled artifact
+8. Return `{ output, error, exitCode, durationMs, compileMs, timedOut, kind }`
 
-**Languages config** in `code-execution.service.ts:19-67`
+`kind` is one of `ok`, `runtime`, `compile`, `spawn`, `timeout`, `cancelled`.
+
+**Stopping a run**: `DELETE /execute/:runId` kills the process group and the
+run resolves with `kind: 'cancelled'`. The client sends a `runId` with the
+request so it can stop the run.
+
+**Memory cap**: Node gets `--max-old-space-size`, the JVM gets `-Xmx`, Go gets
+`GOMEMLIMIT`, everything else runs under `ulimit -v`.
+
+**Languages config** in `code-execution.service.ts`
 
 ## Frontend: Workbench Layout
 
@@ -76,6 +86,10 @@ SwafCode/
 - One program kept per language in `localStorage` (`swafcode:state`)
 - Editor preferences (theme, font size, line numbers) live in `general-settings.ts`
 - Theme = a `data-theme` attribute on `<html>`; the palettes live in `app.css`
+- The console shows a status line: the exit code, how long the run took, and
+  what kind of run it was (`compile error`, `timed out`, `stopped`, ...)
+- `Stop` asks the server to kill the run; the request resolves with the
+  cancelled result instead of being aborted
 
 ### Design rules
 
@@ -89,7 +103,8 @@ SwafCode/
 ## Adding a New Language
 
 1. **Backend** (`code-execution.service.ts`):
-   - Add entry to `languages` record with `ext`, optional `filename`, and `run`
+   - Add entry to `languages` record with `ext`, optional `filename`, `memory` and `run`
+   - `memory` picks the cap: `node`, `jvm`, `go` or `rlimit`
    - Compiled: implement `compile` (returns `{command, args, execPath}`) and `run`
    - Interpreted: only `run` needed
 
