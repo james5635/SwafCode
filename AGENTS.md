@@ -53,6 +53,25 @@ SwafCode/
 └── README.md
 ```
 
+## Backend: Accounts
+
+- Users live in MongoDB, in the `users` collection: email, bcrypt password
+  hash, and the hashed refresh tokens.
+- `POST /auth/register` creates an account, `POST /auth/login` signs in.
+- The access token is a JWT that lasts 15 minutes. The refresh token lasts 7
+  days and is **rotated**: every refresh returns a new pair and retires the
+  old token.
+- Refresh tokens are stored as a SHA-256 digest over the token and the server
+  secret, never in the clear. The digest has to be deterministic, so it must
+  not be a salted hash.
+- `AuthGuard` reads `Authorization: Bearer <token>`. Everything except
+  register, login, refresh and `/execute/languages` needs one.
+- A run belongs to the user who started it: cancelling or writing to it
+  checks the owner.
+
+**Configuration**: `MONGODB_URI` and `JWT_SECRET`. The backend warns when
+`JWT_SECRET` is missing in production.
+
 ## Backend: Code Execution Flow
 
 1. `POST /execute` receives `{ code, language, stdin?, runId?, interactive? }`
@@ -109,7 +128,9 @@ request so it can stop the run.
   reading and each line typed is sent to it while it runs
 - A link in the address bar (`#lang=…&code=…`) carries the program; the copy
   link action in the editor header makes one
-- The vite dev server proxies `/execute` and `/format` to the backend
+- The vite dev server proxies `/execute`, `/format` and `/auth` to the backend
+- The account lives in the `auth` store; `authFetch` attaches the access
+  token, and refreshes it once when the server says the token is too old
 
 ### Design rules
 

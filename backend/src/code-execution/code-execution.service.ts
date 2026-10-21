@@ -23,6 +23,7 @@ export interface ExecuteOptions {
   stdin?: string;
   runId?: string;
   interactive?: boolean;
+  userId?: string;
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
 }
@@ -79,6 +80,7 @@ interface ActiveRun {
   cancelled: boolean;
   kill: () => void;
   write: (data: string) => boolean;
+  ownerId?: string;
 }
 
 interface ProcessOutcome {
@@ -399,6 +401,7 @@ export class CodeExecutionService {
         stdin: options.stdin,
         interactive: options.interactive,
         runId: options.runId,
+        userId: options.userId,
         onStdout: options.onStdout,
         onStderr: options.onStderr,
       });
@@ -460,20 +463,31 @@ export class CodeExecutionService {
     }
   }
 
-  /** Kills a running program. Returns false when the run is already over. */
-  cancel(runId: string): boolean {
+  /**
+   * Kills a running program. Returns false when the run is already over, or
+   * when it belongs to somebody else.
+   */
+  cancel(runId: string, userId?: string): boolean {
     const run = this.active.get(runId);
     if (!run) return false;
+    if (!this.belongsTo(run, userId)) return false;
     run.cancelled = true;
     run.kill();
     return true;
   }
 
   /** Sends text to a running program. Returns false when it is gone. */
-  write(runId: string, data: string): boolean {
+  write(runId: string, data: string, userId?: string): boolean {
     const run = this.active.get(runId);
     if (!run) return false;
+    if (!this.belongsTo(run, userId)) return false;
     return run.write(data);
+  }
+
+  /** A run belongs to the user who started it. */
+  private belongsTo(run: ActiveRun, userId?: string): boolean {
+    if (!run.ownerId) return true;
+    return run.ownerId === userId;
   }
 
   /** Formats a program the way its language expects. */
@@ -588,6 +602,7 @@ export class CodeExecutionService {
       stdin?: string;
       interactive?: boolean;
       runId?: string;
+      userId?: string;
       onStdout?: (chunk: string) => void;
       onStderr?: (chunk: string) => void;
     },
@@ -602,6 +617,7 @@ export class CodeExecutionService {
         cancelled: false,
         kill: () => {},
         write: () => false,
+        ownerId: options.userId,
       };
 
       const proc = spawn(spec.command, spec.args, {

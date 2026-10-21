@@ -1,12 +1,20 @@
-import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
 import { CodeExecutionService } from './code-execution.service';
 import { FormatCodeDto } from './dto/format-code.dto';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Controller('format')
 export class CodeFormatController {
   constructor(private readonly codeExecutionService: CodeExecutionService) {}
 
   @Post()
+  @UseGuards(AuthGuard)
   async format(@Body() dto: FormatCodeDto) {
     if (!dto.code || typeof dto.code !== 'string') {
       throw new BadRequestException('code must be a non-empty string');

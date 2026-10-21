@@ -5,6 +5,9 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
+process.env.MONGODB_URI =
+  process.env.MONGODB_TEST_URI ?? 'mongodb://localhost:27017/swafcode_test';
+
 interface RunResponse {
   output: string;
   error: string;
@@ -24,11 +27,18 @@ interface LanguageResponse {
   formatter: boolean;
 }
 
+interface Tokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
 const hasPython = spawnSync('sh', ['-c', 'command -v python3']).status === 0;
 const itPython = hasPython ? it : it.skip;
 
 describe('Execute (e2e)', () => {
   let app: INestApplication<App>;
+  let tokens: Tokens;
+  let email: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,11 +47,25 @@ describe('Execute (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    email = `e2e-${Date.now()}@example.com`;
+    await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email, password: 'hunter2secret' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: 'hunter2secret' })
+      .expect(201);
+    tokens = login.body as Tokens;
   });
 
   afterAll(async () => {
     await app.close();
   });
+
+  const auth = () => ({ Authorization: `Bearer ${tokens.accessToken}` });
 
   it('lists the supported languages', () => {
     return request(app.getHttpServer())
@@ -56,9 +80,25 @@ describe('Execute (e2e)', () => {
       });
   });
 
+  it('refuses to run a program without a token', () => {
+    return request(app.getHttpServer())
+      .post('/execute')
+      .send({ code: 'print(1)', language: 'python' })
+      .expect(401);
+  });
+
+  it('refuses to run a program with a bad token', () => {
+    return request(app.getHttpServer())
+      .post('/execute')
+      .set('Authorization', 'Bearer not-a-real-token')
+      .send({ code: 'print(1)', language: 'python' })
+      .expect(401);
+  });
+
   it('rejects an unsupported language', () => {
     return request(app.getHttpServer())
       .post('/execute')
+      .set(auth())
       .send({ code: 'print(1)', language: 'cobol' })
       .expect(400);
   });
@@ -66,6 +106,7 @@ describe('Execute (e2e)', () => {
   it('rejects an empty program', () => {
     return request(app.getHttpServer())
       .post('/execute')
+      .set(auth())
       .send({ code: '', language: 'python' })
       .expect(400);
   });
@@ -73,6 +114,7 @@ describe('Execute (e2e)', () => {
   itPython('runs a program and reports the exit status', async () => {
     const res = await request(app.getHttpServer())
       .post('/execute')
+      .set(auth())
       .send({ code: 'print("hello")', language: 'python' });
 
     expect(res.status).toBe(201);
@@ -87,6 +129,7 @@ describe('Execute (e2e)', () => {
   itPython('reports a failing program as a runtime error', async () => {
     const res = await request(app.getHttpServer())
       .post('/execute')
+      .set(auth())
       .send({ code: 'import sys; sys.exit(3)', language: 'python' });
 
     expect(res.status).toBe(201);
@@ -98,6 +141,7 @@ describe('Execute (e2e)', () => {
   itPython('streams the output of a program', async () => {
     const res = await request(app.getHttpServer())
       .post('/execute/stream')
+      .set(auth())
       .send({
         code: 'import time\nprint("one", flush=True)\ntime.sleep(0.2)\nprint("two", flush=True)',
         language: 'python',
@@ -129,6 +173,7 @@ describe('Execute (e2e)', () => {
     // .then() is what actually sends the request
     const running = request(app.getHttpServer())
       .post('/execute/stream')
+      .set(auth())
       .send({
         code: 'print(input())',
         language: 'python',
@@ -142,6 +187,7 @@ describe('Execute (e2e)', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const write = await request(app.getHttpServer())
         .post('/execute/e2e-stdin/stdin')
+        .set(auth())
         .send({ data: 'hello\n' });
       written = (write.body as { written: boolean }).written;
     }
@@ -155,6 +201,7 @@ describe('Execute (e2e)', () => {
   it('reports an unknown run as not cancelled', () => {
     return request(app.getHttpServer())
       .delete('/execute/run-that-never-started')
+      .set(auth())
       .expect(200)
       .expect({ cancelled: false });
   });
@@ -162,15 +209,24 @@ describe('Execute (e2e)', () => {
   it('formats a program', async () => {
     const res = await request(app.getHttpServer())
       .post('/format')
+      .set(auth())
       .send({ code: 'const  x   =1', language: 'typescript' });
 
     expect(res.status).toBe(201);
     expect((res.body as { code: string }).code).toBe('const x = 1;\n');
   });
 
+  it('refuses to format without a token', () => {
+    return request(app.getHttpServer())
+      .post('/format')
+      .send({ code: 'const x = 1', language: 'typescript' })
+      .expect(401);
+  });
+
   it('rejects a format request for an unknown language', () => {
     return request(app.getHttpServer())
       .post('/format')
+      .set(auth())
       .send({ code: 'x', language: 'cobol' })
       .expect(400);
   });

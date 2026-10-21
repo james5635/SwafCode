@@ -3,8 +3,11 @@
 	import AiChat from '$lib/components/AiChat.svelte';
 	import ConsolePanel from '$lib/components/ConsolePanel.svelte';
 	import SettingsDialog from '$lib/components/SettingsDialog.svelte';
+	import SignInDialog from '$lib/components/SignInDialog.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { generalSettings } from '$lib/stores/general-settings';
+	import { auth } from '$lib/stores/auth';
+	import { authFetch, signOut } from '$lib/auth';
 	import { runShortcut } from '$lib/shortcut';
 	import { untrack } from 'svelte';
 
@@ -187,12 +190,16 @@ func main() {
 	let consoleHeight = $state(220);
 	let settingsOpen = $state(false);
 	let confirmExample = $state(false);
+	let signInOpen = $state(false);
 
 	let exitCode = $state<number | null>(null);
 	let durationMs = $state(0);
 	let compileMs = $state(0);
 	let runKind = $state<string | null>(null);
 	let liveInput = $state(false);
+
+	let signedIn = $derived(Boolean($auth.accessToken));
+	let accountEmail = $derived($auth.user?.email ?? '');
 
 	let abortController: AbortController | null = null;
 	let activeRunId: string | null = null;
@@ -334,7 +341,7 @@ func main() {
 		abortController = new AbortController();
 
 		try {
-			const res = await fetch(`${API}/stream`, {
+			const res = await authFetch(`${API}/stream`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -347,6 +354,10 @@ func main() {
 				signal: abortController.signal
 			});
 
+			if (res.status === 401) {
+				signInOpen = true;
+				throw new Error('Sign in to run programs');
+			}
 			if (!res.ok || !res.body) {
 				throw new Error(`Request failed with status ${res.status}`);
 			}
@@ -408,7 +419,7 @@ func main() {
 	function stopRun() {
 		const id = activeRunId;
 		if (!id) return;
-		fetch(`${API}/${id}`, { method: 'DELETE' }).catch(() => {});
+		authFetch(`${API}/${id}`, { method: 'DELETE' }).catch(() => {});
 		stopFallback = setTimeout(() => abortController?.abort(), 2000);
 	}
 
@@ -416,7 +427,7 @@ func main() {
 	function sendInput(data: string) {
 		const id = activeRunId;
 		if (!id) return;
-		fetch(`${API}/${id}/stdin`, {
+		authFetch(`${API}/${id}/stdin`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ data })
@@ -499,11 +510,15 @@ func main() {
 
 	async function formatCode() {
 		try {
-			const res = await fetch(FORMAT_API, {
+			const res = await authFetch(FORMAT_API, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ code, language: selectedLang })
 			});
+			if (res.status === 401) {
+				signInOpen = true;
+				return;
+			}
 			const data = await res.json();
 			if (data.code) {
 				code = data.code;
@@ -513,6 +528,13 @@ func main() {
 		} catch (err: any) {
 			notice = `Formatting failed: ${err?.message ?? 'unknown error'}`;
 		}
+	}
+
+	async function handleSignOut() {
+		await signOut();
+		stdout = '';
+		stderr = '';
+		runKind = null;
 	}
 
 	function startResize(event: PointerEvent) {
@@ -603,6 +625,20 @@ func main() {
 			>
 				<Icon name="agent" />
 			</button>
+			{#if signedIn}
+				<button
+					class="account"
+					title={accountEmail}
+					onclick={handleSignOut}
+				>
+					<span class="account-name">{accountEmail}</span>
+					<span class="account-action">Sign out</span>
+				</button>
+			{:else}
+				<button class="btn btn--quiet signin" onclick={() => (signInOpen = true)}>
+					Sign in
+				</button>
+			{/if}
 			{#if running}
 				<button class="btn btn--text stop" onclick={stopRun}>
 					<Icon name="stop" size={13} />
@@ -734,6 +770,8 @@ func main() {
 
 <SettingsDialog bind:open={settingsOpen} onClose={() => (settingsOpen = false)} />
 
+<SignInDialog bind:open={signInOpen} />
+
 <style>
 	.app {
 		display: flex;
@@ -804,6 +842,39 @@ func main() {
 	.run-key {
 		background: rgba(127, 127, 127, 0.28);
 		color: inherit;
+	}
+
+	.signin {
+		flex: none;
+	}
+
+	.account {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		height: var(--control-h);
+		max-width: 220px;
+		padding: 0 10px;
+		border-radius: var(--radius-chip);
+		transition: background-color 0.12s ease;
+	}
+
+	.account:hover {
+		background: var(--raised);
+	}
+
+	.account-name {
+		font-size: var(--fs-small);
+		color: var(--muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-action {
+		font-size: var(--fs-small);
+		color: var(--text);
+		white-space: nowrap;
 	}
 
 	.stop {

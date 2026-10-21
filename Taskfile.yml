@@ -32,6 +32,11 @@ tasks:
     desc: Run backend and frontend dev servers in parallel
     deps: [dev:backend, dev:frontend]
 
+  mongo:
+    desc: Run MongoDB in Docker (needed by the backend)
+    cmds:
+      - docker run --rm --name swafcode-mongodb -p 27017:27017 -v swafcode-mongodb:/data/db mongo:latest
+
   dev:backend:
     desc: Run the NestJS backend in watch mode (http://localhost:3000)
     dir: '{{.BACKEND_DIR}}'

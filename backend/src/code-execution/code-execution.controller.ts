@@ -7,6 +7,7 @@ import {
   Param,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -15,12 +16,9 @@ import {
   RunResult,
 } from './code-execution.service';
 import { ExecuteCodeDto } from './dto/execute-code.dto';
-
-type StreamEvent =
-  | { type: 'out'; data: string }
-  | { type: 'err'; data: string }
-  | { type: 'end'; result: RunResult }
-  | { type: 'error'; message: string };
+import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { TokenPayload } from '../auth/auth.guard';
 
 @Controller('execute')
 export class CodeExecutionController {
@@ -32,17 +30,24 @@ export class CodeExecutionController {
   }
 
   @Post()
-  async run(@Body() dto: ExecuteCodeDto) {
+  @UseGuards(AuthGuard)
+  async run(@Body() dto: ExecuteCodeDto, @CurrentUser() user: TokenPayload) {
     this.validate(dto);
     return this.codeExecutionService.execute(dto.code, dto.language, {
       stdin: dto.stdin,
       runId: dto.runId,
       interactive: dto.interactive,
+      userId: user.sub,
     });
   }
 
   @Post('stream')
-  async stream(@Body() dto: ExecuteCodeDto, @Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async stream(
+    @Body() dto: ExecuteCodeDto,
+    @Res() res: Response,
+    @CurrentUser() user: TokenPayload,
+  ) {
     this.validate(dto);
 
     res.status(200);
@@ -52,7 +57,12 @@ export class CodeExecutionController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const write = (event: StreamEvent) => {
+    const write = (event: {
+      type: string;
+      data?: string;
+      result?: RunResult;
+      message?: string;
+    }) => {
       res.write(`${JSON.stringify(event)}\n`);
     };
 
@@ -68,6 +78,7 @@ export class CodeExecutionController {
           stdin: dto.stdin,
           runId: dto.runId,
           interactive: dto.interactive,
+          userId: user.sub,
           onStdout: (data) => write({ type: 'out', data }),
           onStderr: (data) => write({ type: 'err', data }),
         },
@@ -84,14 +95,20 @@ export class CodeExecutionController {
   }
 
   @Post(':runId/stdin')
-  writeStdin(@Param('runId') runId: string, @Body() body: { data?: string }) {
+  @UseGuards(AuthGuard)
+  writeStdin(
+    @Param('runId') runId: string,
+    @Body() body: { data?: string },
+    @CurrentUser() user: TokenPayload,
+  ) {
     const data = typeof body?.data === 'string' ? body.data : '';
-    return { written: this.codeExecutionService.write(runId, data) };
+    return { written: this.codeExecutionService.write(runId, data, user.sub) };
   }
 
   @Delete(':runId')
-  cancel(@Param('runId') runId: string) {
-    return { cancelled: this.codeExecutionService.cancel(runId) };
+  @UseGuards(AuthGuard)
+  cancel(@Param('runId') runId: string, @CurrentUser() user: TokenPayload) {
+    return { cancelled: this.codeExecutionService.cancel(runId, user.sub) };
   }
 
   private validate(dto: ExecuteCodeDto) {

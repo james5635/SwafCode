@@ -5,6 +5,8 @@ A web-based code execution playground supporting multiple programming languages.
 ## Features
 
 - **6 Languages Supported**: TypeScript, Python, Java, C++, Rust, Go
+- **Accounts**: sign up or sign in; programs and runs belong to your account
+- **Access and refresh tokens**: short-lived access token, long-lived refresh token that rotates on every use
 - **Live Output**: The console fills as the program writes, not when it ends
 - **Live Input**: Send lines to a program that is still running
 - **Real-time Execution**: Run code with a 10s timeout, stop it early
@@ -34,22 +36,34 @@ A web-based code execution playground supporting multiple programming languages.
 SwafCode/
 ├── backend/                 # NestJS API
 │   └── src/
+│       ├── mongodb.module.ts # MongoDB connection
+│       ├── auth/             # Register, login, refresh, logout
+│       │   ├── auth.service.ts
+│       │   ├── auth.controller.ts
+│       │   └── auth.guard.ts
+│       ├── users/            # User records in MongoDB
 │       └── code-execution/  # Code execution service
 │           ├── code-execution.service.ts
 │           ├── code-execution.controller.ts
+│           ├── code-format.controller.ts
 │           └── dto/execute-code.dto.ts
 ├── frontend/                # SvelteKit app
 │   ├── static/fonts/        # Self-hosted Public Sans + JetBrains Mono
 │   └── src/
 │       ├── app.css          # Design tokens, theme palettes, shared controls
-│       ├── lib/components/
-│       │   ├── CodeEditor.svelte
-│       │   ├── ConsolePanel.svelte
-│       │   ├── AiChat.svelte
-│       │   ├── SettingsDialog.svelte
-│       │   └── Icon.svelte
+│       ├── lib/
+│       │   ├── auth.ts      # Token handling, refresh, retry
+│       │   ├── components/
+│       │   │   ├── CodeEditor.svelte
+│       │   │   ├── ConsolePanel.svelte
+│       │   │   ├── AiChat.svelte
+│       │   │   ├── SettingsDialog.svelte
+│       │   │   ├── SignInDialog.svelte
+│       │   │   └── Icon.svelte
+│       │   └── stores/      # general-settings.ts, ai-settings.ts, auth.ts
 │       └── routes/+page.svelte
 ├── Taskfile.yml             # Task runner commands
+├── docker-compose.yml       # Backend, frontend and MongoDB
 └── README.md
 ```
 
@@ -106,12 +120,77 @@ task preview
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/auth/register` | Create an account |
+| POST | `/auth/login` | Sign in, get a pair of tokens |
+| POST | `/auth/refresh` | Swap a refresh token for a new pair |
+| POST | `/auth/logout` | Sign out, kill the refresh token |
+| POST | `/auth/me` | Who the access token belongs to |
 | GET | `/execute/languages` | List supported languages and what is installed |
 | POST | `/execute` | Execute code |
 | POST | `/execute/stream` | Execute code, streaming the output |
 | POST | `/execute/:runId/stdin` | Send text to a running program |
 | DELETE | `/execute/:runId` | Stop a running program |
 | POST | `/format` | Format a program |
+
+Everything except `/auth/register`, `/auth/login`, `/auth/refresh` and
+`/execute/languages` needs an access token.
+
+### Accounts
+
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "your password"}'
+```
+
+```json
+{ "id": "6ad8d7ee4219cc02d69ec70c", "email": "you@example.com" }
+```
+
+The password is stored as a bcrypt hash. The refresh tokens are stored hashed
+too, so a leaked database cannot be used to sign in.
+
+### Sign In
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "your password"}'
+```
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "8f14e45fceea167a5a36dedd4bea2543..."
+}
+```
+
+The access token is a JWT that lasts 15 minutes and is sent with every
+request:
+
+```
+Authorization: Bearer <accessToken>
+```
+
+The refresh token lasts 7 days. It is **rotated**: every refresh returns a new
+pair and retires the old refresh token, so a stolen one is only good once.
+
+### Refresh and Sign Out
+
+```bash
+curl -X POST http://localhost:3000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "<refreshToken>"}'
+```
+
+Signing out kills the refresh token, so the session ends there:
+
+```bash
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "<refreshToken>"}'
+```
 
 ### Execute Code
 
@@ -217,8 +296,30 @@ had already finished.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
+| `MONGODB_URI` | `mongodb://localhost:27017/swafcode` | Where the users live |
+| `JWT_SECRET` | `change-me-in-production` | Signs the access tokens |
 | `SWAFCODE_RUN_TIMEOUT_MS` | `10000` | How long a program may run |
 | `SWAFCODE_COMPILE_TIMEOUT_MS` | `45000` | How long a compiler may run |
+
+`JWT_SECRET` has to be set for a real deployment: every deployment that shares
+a secret shares its accounts. The backend warns when it is missing in
+production.
+
+## Running with Docker
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+```
+
+MongoDB comes up with it, on port 27017, with its data in a named volume. The
+backend waits for MongoDB to be healthy before it starts.
+
+For local development without Docker Compose, run MongoDB on its own:
+
+```bash
+task mongo     # docker run ... mongo:latest
+task dev       # backend on 3000, frontend on 5173
+```
 
 ## Language Details
 
