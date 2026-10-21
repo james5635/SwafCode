@@ -17,17 +17,17 @@
 	import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 	import { tags } from '@lezer/highlight';
 
-	type ThemeId = 'default' | 'light' | 'monokai' | 'vscode' | 'github' | 'gruvbox';
+	type ThemeId = 'swaf' | 'onedark' | 'light' | 'monokai' | 'vscode' | 'github' | 'gruvbox';
 
 	let {
 		code = $bindable(''),
 		language = 'typescript',
 		onRun,
-		theme: editorTheme = 'default',
+		theme: editorTheme = 'swaf',
 		fontSize = 14,
 		showLineNumbers = true,
 		streaming = false,
-		autoScroll = true,
+		autoScroll = true
 	}: {
 		code: string;
 		language: string;
@@ -42,6 +42,9 @@
 	let container: HTMLDivElement;
 	let view: EditorView;
 	let mounted = false;
+	// True while we push code into the editor, so the listener below does
+	// not echo our own edit back to the parent and fight the user's cursor.
+	let applyingExternal = false;
 
 	const lightHighlightStyle = HighlightStyle.define([
 		{ tag: tags.keyword, color: '#cf222e' },
@@ -53,18 +56,61 @@
 		{ tag: [tags.namespace], color: '#116329' },
 		{ tag: [tags.operator, tags.operatorKeyword], color: '#0550ae' },
 		{ tag: [tags.bracket, tags.brace, tags.punctuation], color: '#24292f' },
-		{ tag: [tags.function(tags.variableName), tags.labelName], color: '#8250df' },
+		{ tag: [tags.function(tags.variableName), tags.labelName], color: '#0550ae' },
 		{ tag: tags.definition(tags.variableName), color: '#24292f' },
 		{ tag: [tags.number, tags.bool, tags.null], color: '#0550ae' },
 		{ tag: [tags.string, tags.special(tags.string)], color: '#0a3069' },
 		{ tag: [tags.comment, tags.blockComment, tags.lineComment], color: '#6e7781', fontStyle: 'italic' },
 		{ tag: [tags.meta, tags.processingInstruction], color: '#0550ae' },
 		{ tag: [tags.constant(tags.name), tags.standard(tags.name)], color: '#0550ae' },
-		{ tag: [tags.tagName], color: '#116329' },
-		{ tag: [tags.attributeName], color: '#0550ae' },
-		{ tag: [tags.heading], color: '#0550ae', fontWeight: 'bold' },
+		{ tag: tags.tagName, color: '#116329' },
+		{ tag: tags.attributeName, color: '#0550ae' },
+		{ tag: tags.heading, color: '#0550ae', fontWeight: 'bold' },
 		{ tag: [tags.link, tags.url], color: '#0969da' },
-		{ tag: tags.invalid, color: '#cf222e' },
+		{ tag: tags.invalid, color: '#cf222e' }
+	]);
+
+	// SwafCode's own theme: One Dark's hues with the violet keywords and the
+	// grey comments lifted until every colour clears 4.5:1 on the ground.
+	const swafHighlightStyle = HighlightStyle.define([
+		{ tag: [tags.comment, tags.blockComment, tags.lineComment], color: '#98a1b0', fontStyle: 'italic' },
+		{ tag: [tags.keyword, tags.controlKeyword, tags.moduleKeyword], color: '#e48087' },
+		{ tag: [tags.name, tags.deleted, tags.character, tags.macroName], color: '#e48087' },
+		{ tag: [tags.propertyName, tags.definition(tags.variableName), tags.separator], color: '#e48087' },
+		{ tag: [tags.function(tags.variableName), tags.labelName], color: '#8ec9e0' },
+		{ tag: [tags.color, tags.constant(tags.name), tags.standard(tags.name)], color: '#8ec9e0' },
+		{ tag: [tags.atom, tags.bool, tags.special(tags.variableName)], color: '#e5c07b' },
+		{
+			tag: [
+				tags.typeName,
+				tags.className,
+				tags.number,
+				tags.changed,
+				tags.annotation,
+				tags.modifier,
+				tags.self,
+				tags.namespace
+			],
+			color: '#e5c07b'
+		},
+		{
+			tag: [
+				tags.operator,
+				tags.operatorKeyword,
+				tags.url,
+				tags.escape,
+				tags.regexp,
+				tags.link,
+				tags.special(tags.string)
+			],
+			color: '#56b6c2'
+		},
+		{ tag: [tags.processingInstruction, tags.string, tags.inserted], color: '#98c379' },
+		{ tag: [tags.meta], color: '#98a1b0' },
+		{ tag: tags.heading, fontWeight: 'bold', color: '#e48087' },
+		{ tag: tags.strong, fontWeight: 'bold' },
+		{ tag: tags.emphasis, fontStyle: 'italic' },
+		{ tag: tags.invalid, color: '#e48087' }
 	]);
 
 	const langCompartment = new Compartment();
@@ -91,33 +137,63 @@
 	}
 
 	const lightTheme = [
-		EditorView.theme({
-			'&': { backgroundColor: '#ffffff', color: '#24292f' },
-			'.cm-gutters': { backgroundColor: '#f6f8fa', color: '#8c959f', borderRight: '1px solid #eaeef2' },
-			'.cm-activeLine': { backgroundColor: 'rgba(9, 105, 218, 0.06)' },
-			'.cm-activeLineGutter': { backgroundColor: '#eaeef2', color: '#1f2328' },
-			'.cm-selectionBackground, ::selection': { backgroundColor: '#cce5ff' },
-			'.cm-cursor, .cm-dropCursor': { borderLeftColor: '#24292f' },
-			'.cm-matchingBracket': { backgroundColor: '#ddf4ff', outline: '1px solid #0969da' },
-		}, { dark: false }),
-		syntaxHighlighting(lightHighlightStyle),
+		EditorView.theme(
+			{
+				'&': { backgroundColor: 'var(--ground)', color: 'var(--text)' },
+				'.cm-gutters': {
+					backgroundColor: 'var(--ground)',
+					color: 'var(--faint)',
+					borderRight: '1px solid var(--rule)'
+				},
+				'.cm-activeLine': { backgroundColor: 'var(--editor-active)' },
+				'.cm-activeLineGutter': { backgroundColor: 'var(--editor-active)', color: 'var(--muted)' },
+				'.cm-selectionBackground, ::selection': { backgroundColor: 'var(--editor-selection)' },
+				'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' }
+			},
+			{ dark: false }
+		),
+		syntaxHighlighting(lightHighlightStyle)
 	];
+
+	// The shell palette wins over the imported editor theme, so the editor
+	// always sits on the same ground as the rest of the application.
+	function shellTheme(dark: boolean): Extension {
+		return EditorView.theme(
+			{
+				'&': { backgroundColor: 'var(--ground)', color: 'var(--text)' },
+				'.cm-scroller': { fontFamily: 'var(--font-code)' },
+				'.cm-gutters': {
+					backgroundColor: 'var(--ground)',
+					color: 'var(--faint)',
+					borderRight: '1px solid var(--rule)'
+				},
+				'.cm-activeLine': { backgroundColor: 'var(--editor-active)' },
+				'.cm-activeLineGutter': { backgroundColor: 'var(--editor-active)', color: 'var(--muted)' },
+				'.cm-selectionBackground, ::selection': { backgroundColor: 'var(--editor-selection)' },
+				'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
+				'.cm-placeholder': { color: 'var(--faint)' }
+			},
+			{ dark }
+		);
+	}
 
 	function getThemeExtension(t: ThemeId): Extension {
 		switch (t) {
 			case 'monokai':
-				return monokai;
+				return [monokai, shellTheme(true)];
 			case 'vscode':
-				return vsCodeDark;
+				return [vsCodeDark, shellTheme(true)];
 			case 'github':
-				return githubDark;
+				return [githubDark, shellTheme(true)];
 			case 'gruvbox':
-				return gruvboxDark;
+				return [gruvboxDark, shellTheme(true)];
+			case 'onedark':
+				return [oneDark, shellTheme(true)];
 			case 'light':
 				return lightTheme;
-			case 'default':
+			case 'swaf':
 			default:
-				return oneDark;
+				return [syntaxHighlighting(swafHighlightStyle), shellTheme(true)];
 		}
 	}
 
@@ -125,34 +201,38 @@
 		return [
 			themeCompartment.of(getThemeExtension(editorTheme)),
 			langCompartment.of(getLangExtension(lang)),
-			fontSizeCompartment.of(EditorView.theme({
-				'&': {
-					fontSize: `${fontSize}px`,
-				},
-			})),
+			fontSizeCompartment.of(
+				EditorView.theme({
+					'&': { fontSize: `${fontSize}px` }
+				})
+			),
 			lineNumbersCompartment.of(showLineNumbers ? lineNumbers() : []),
-			keymap.of([{
-				key: 'Mod-Enter',
-				run: () => {
-					onRun?.();
-					return true;
+			keymap.of([
+				{
+					key: 'Mod-Enter',
+					run: () => {
+						onRun?.();
+						return true;
+					},
+					preventDefault: true
 				},
-				preventDefault: true,
-			}, ...defaultKeymap, indentWithTab]),
+				...defaultKeymap,
+				indentWithTab
+			]),
 			EditorView.updateListener.of((update) => {
-				if (!streaming && update.docChanged) {
-					code = update.state.doc.toString();
-				}
+				if (!update.docChanged || applyingExternal) return;
+				code = update.state.doc.toString();
 			}),
-			ph('Write your code here...'),
-			EditorView.lineWrapping,
+			EditorView.contentAttributes.of({ 'aria-label': 'Code editor' }),
+			ph('Write your code here…'),
+			EditorView.lineWrapping
 		];
 	}
 
 	function createView(lang: string, doc: string) {
 		const state = EditorState.create({
 			doc,
-			extensions: createExtensions(lang),
+			extensions: createExtensions(lang)
 		});
 		return new EditorView({ state, parent: container });
 	}
@@ -169,60 +249,66 @@
 	$effect(() => {
 		if (!mounted || !view) return;
 		view.dispatch({
-			effects: langCompartment.reconfigure(getLangExtension(language)),
+			effects: langCompartment.reconfigure(getLangExtension(language))
 		});
 	});
 
 	$effect(() => {
 		if (!mounted || !view) return;
 		view.dispatch({
-			effects: themeCompartment.reconfigure(getThemeExtension(editorTheme)),
+			effects: themeCompartment.reconfigure(getThemeExtension(editorTheme))
 		});
 	});
 
 	$effect(() => {
 		if (!mounted || !view) return;
 		view.dispatch({
-			effects: fontSizeCompartment.reconfigure(EditorView.theme({
-				'&': {
-					fontSize: `${fontSize}px`,
-				},
-			})),
+			effects: fontSizeCompartment.reconfigure(
+				EditorView.theme({
+					'&': {
+						fontSize: `${fontSize}px`
+					}
+				})
+			)
 		});
 	});
 
 	$effect(() => {
 		if (!mounted || !view) return;
 		view.dispatch({
-			effects: lineNumbersCompartment.reconfigure(showLineNumbers ? lineNumbers() : []),
+			effects: lineNumbersCompartment.reconfigure(showLineNumbers ? lineNumbers() : [])
 		});
 	});
 
 	$effect(() => {
 		if (!mounted || !view) return;
 		const currentDoc = view.state.doc.toString();
-		if (currentDoc !== code) {
+		if (currentDoc === code) return;
+
+		applyingExternal = true;
+		try {
 			if (streaming && code.startsWith(currentDoc)) {
 				// Streaming: only append the new tail
 				const scroller = view.scrollDOM;
-				const atBottom =
-					scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+				const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
 
 				view.dispatch({
-					changes: { from: currentDoc.length, insert: code.slice(currentDoc.length) },
+					changes: { from: currentDoc.length, insert: code.slice(currentDoc.length) }
 				});
 
 				if (autoScroll && atBottom) {
 					view.dispatch({
-						effects: EditorView.scrollIntoView(code.length, { y: 'end' }),
+						effects: EditorView.scrollIntoView(code.length, { y: 'end' })
 					});
 				}
 			} else {
 				// Normal: full replace
 				view.dispatch({
-					changes: { from: 0, to: currentDoc.length, insert: code },
+					changes: { from: 0, to: currentDoc.length, insert: code }
 				});
 			}
+		} finally {
+			applyingExternal = false;
 		}
 	});
 </script>
@@ -232,6 +318,7 @@
 <style>
 	.editor {
 		flex: 1;
+		min-height: 0;
 		overflow: hidden;
 	}
 
@@ -240,7 +327,12 @@
 	}
 
 	.editor :global(.cm-scroller) {
-		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+		font-family: var(--font-code);
 		line-height: 1.6;
+		padding: 14px 0 40px;
+	}
+
+	.editor :global(.cm-content) {
+		caret-color: var(--accent);
 	}
 </style>

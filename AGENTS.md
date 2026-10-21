@@ -37,10 +37,18 @@ SwafCode/
 │           ├── code-execution.controller.ts # REST endpoints
 │           └── dto/execute-code.dto.ts     # Validation
 ├── frontend/                # SvelteKit + Vite (port 5173)
+│   ├── static/fonts/        # Self-hosted Public Sans + JetBrains Mono
 │   └── src/
-│       ├── lib/components/CodeEditor.svelte  # CodeMirror 6 editor
-│       ├── routes/+page.svelte               # Main page
-│       └── app.html
+│       ├── app.css          # Tokens, theme palettes, shared controls
+│       ├── app.html         # Font preload + no-flash theme bootstrap
+│       ├── lib/components/
+│       │   ├── CodeEditor.svelte    # CodeMirror 6 editor
+│       │   ├── ConsolePanel.svelte  # stdout / stderr / stdin panel
+│       │   ├── AiChat.svelte         # Agent transcript + composer
+│       │   ├── SettingsDialog.svelte # General and AI agent settings
+│       │   └── Icon.svelte           # One set of 16px outline icons
+│       ├── lib/stores/      # general-settings.ts, ai-settings.ts
+│       └── routes/+page.svelte       # Workbench layout
 ├── Taskfile.yml             # Task runner config
 └── README.md
 ```
@@ -57,23 +65,36 @@ SwafCode/
 
 **Languages config** in `code-execution.service.ts:19-67`
 
-## Frontend: State Management
+## Frontend: Workbench Layout
 
-- Svelte 5 runes (`$state`, `$effect`, `$bindable`)
-- Language list fetched from `/execute/languages` on mount
+- Top bar: wordmark, language tabs (underline selection), settings, agent toggle, Run
+- Workbench: editor over console, separated by a draggable splitter
+- Agent rail: 372px on wide screens, a sheet under 1100px
+- Svelte 5 runes (`$state`, `$effect`, `$derived`, `$bindable`)
+- Language list fetched from `/execute/languages`, with a built-in fallback list
 - Code bound bidirectionally to CodeMirror via `bind:code`
-- Language switching uses CodeMirror `Compartment.reconfigure()` (no editor destroy/recreate)
-- Output/Error tabs with error badge indicator
+- One program kept per language in `localStorage` (`swafcode:state`)
+- Editor preferences (theme, font size, line numbers) live in `general-settings.ts`
+- Theme = a `data-theme` attribute on `<html>`; the palettes live in `app.css`
+
+### Design rules
+
+- One ground, divided by 1px rules. No shadows except on the dialog and the agent sheet.
+- Every selection is a 1px accent line as wide as its label, on the nearest edge.
+- One filled primary action per screen (Run). Everything else is quiet.
+- Public Sans for interface text, JetBrains Mono for code and every figure.
+- No emoji, no gradients, no glass, no uppercase tracked labels.
+- Every text colour must clear 4.5:1 on the surface it sits on.
 
 ## Adding a New Language
 
 1. **Backend** (`code-execution.service.ts`):
-   - Add entry to `languages` record with `ext`, optional `filename`, `compile`, and `run`
+   - Add entry to `languages` record with `ext`, optional `filename`, and `run`
    - Compiled: implement `compile` (returns `{command, args, execPath}`) and `run`
    - Interpreted: only `run` needed
 
 2. **Backend** (`code-execution.controller.ts`):
-   - Add to `LANGUAGES` array: `{ id, name, version }`
+   - Add to the `LANGUAGES` array: `{ id, name, runtime, filename }`
 
 3. **Backend** (`dto/execute-code.dto.ts`):
    - Add to union type
@@ -81,9 +102,12 @@ SwafCode/
 4. **Frontend** (`CodeEditor.svelte`):
    - Import language from `@codemirror/lang-*`
    - Add case in `getLangExtension()`
+   - Add the syntax palette to `swafHighlightStyle` (the built-in theme)
 
 5. **Frontend** (`+page.svelte`):
-   - Add boilerplate to `DEFAULT_CODE` record
+   - Add to `FALLBACK_LANGUAGES` and to `DEFAULT_CODE`
+   - `DEFAULT_CODE` is the example program for that language; the `Example` action
+     in the editor header restores it, so keep it runnable and short
 
 6. **Install CodeMirror language package** if needed:
    ```bash
@@ -110,8 +134,10 @@ task test:e2e   # Jest e2e tests (backend)
 |-------|-----|
 | Port 3000/5173 in use | `lsof -ti:3000 | xargs kill -9` |
 | Editor can't type | Check `Compartment.reconfigure()` not destroying view |
+| Typing is reverted | `applyingExternal` in `CodeEditor.svelte` must only wrap our own dispatches |
 | Language not highlighting | Verify `@codemirror/lang-*` installed and imported |
 | Compilation fails | Ensure runtime installed (`tsx`, `javac`, `g++`, `rustc`, `go`) |
+| Theme looks wrong | The palette lives in `app.css` under `[data-theme='…']`; check contrast at 4.5:1 |
 
 ## Environment
 

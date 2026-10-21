@@ -1,426 +1,610 @@
 <script lang="ts">
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import AiChat from '$lib/components/AiChat.svelte';
-	import ApiSettings from '$lib/components/ApiSettings.svelte';
+	import ConsolePanel from '$lib/components/ConsolePanel.svelte';
+	import SettingsDialog from '$lib/components/SettingsDialog.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { generalSettings } from '$lib/stores/general-settings';
+	import { runShortcut } from '$lib/shortcut';
+	import { untrack } from 'svelte';
 
 	const API = '/execute';
 	const STORAGE_KEY = 'swafcode:state';
 
-	type Language = { id: string; name: string; version: string };
+	type Language = { id: string; name: string; runtime: string; filename: string };
 
-	let languages = $state<Language[]>([]);
-	let selectedLang = $state('typescript');
-	let code = $state('');
-	let output = $state('');
-	let running = $state(false);
-	let outputTab = $state<'stdout' | 'stderr' | 'stdin' | 'ai'>('stdout');
-	let stderr = $state('');
-	let stdin = $state('');
+	// The same list the backend serves, so the interface is complete before
+	// the first request lands.
+	const FALLBACK_LANGUAGES: Language[] = [
+		{ id: 'typescript', name: 'TypeScript', runtime: 'tsx', filename: 'code.ts' },
+		{ id: 'python', name: 'Python', runtime: 'python3', filename: 'code.py' },
+		{ id: 'java', name: 'Java', runtime: 'openjdk', filename: 'Main.java' },
+		{ id: 'cpp', name: 'C++', runtime: 'g++', filename: 'code.cpp' },
+		{ id: 'rust', name: 'Rust', runtime: 'rustc', filename: 'code.rs' },
+		{ id: 'go', name: 'Go', runtime: 'go', filename: 'code.go' }
+	];
 
-	// Settings
-	let fontSize = $state(14);
-	let showLineNumbers = $state(true);
-	let streamingEdits = $state(true);
-	let settingsOpen = $state(false);
-
-	// Derived from general settings store
-	let autoScrollStreaming = $derived($generalSettings.autoScrollStreaming);
-	let editorThemeDerived = $derived($generalSettings.theme);
-
+	// The same program in every language, so switching tabs shows the same
+	// algorithm written the way that language writes it.
 	const DEFAULT_CODE: Record<string, string> = {
-		typescript: `function greet(name: string): string {
-    return \`Hello, \${name}!\`;
+		typescript: `function isPrime(n: number): boolean {
+	for (let d = 2; d * d <= n; d++) {
+		if (n % d === 0) return false;
+	}
+	return true;
 }
 
-console.log(greet("World"));`,
-		python: `print("Hello, World!")`,
-		java: `public class Main {
+const primes: number[] = [];
+for (let n = 2; n <= 30; n++) {
+	if (isPrime(n)) primes.push(n);
+}
+
+for (const p of primes) {
+	console.log(\`prime \${String(p).padStart(2)}  \${String(p * p).padStart(4)}\`);
+}
+
+console.log(\`\${primes.length} primes below 30\`);`,
+		python: `def is_prime(n):
+    for d in range(2, int(n ** 0.5) + 1):
+        if n % d == 0:
+            return False
+    return True
+
+
+primes = [n for n in range(2, 31) if is_prime(n)]
+squares = {p: p * p for p in primes}
+
+for p in primes:
+    print(f"prime {p:>2}  {squares[p]:>4}")
+
+print(f"{len(primes)} primes below 30")`,
+		java: `import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
     public static void main(String[] args) {
-        System.out.println("Hello, World!");
+        List<Integer> primes = primesUpTo(30);
+
+        for (int p : primes) {
+            System.out.printf("prime %2d  %4d%n", p, p * p);
+        }
+
+        System.out.println(primes.size() + " primes below 30");
+    }
+
+    static List<Integer> primesUpTo(int limit) {
+        List<Integer> found = new ArrayList<>();
+        for (int n = 2; n <= limit; n++) {
+            if (isPrime(n)) {
+                found.add(n);
+            }
+        }
+        return found;
+    }
+
+    static boolean isPrime(int n) {
+        for (int d = 2; d * d <= n; d++) {
+            if (n % d == 0) {
+                return false;
+            }
+        }
+        return true;
     }
 }`,
-		cpp: `#include <iostream>
+		cpp: `#include <iomanip>
+#include <iostream>
+#include <vector>
 using namespace std;
 
+bool isPrime(int n) {
+    for (int d = 2; d * d <= n; d++) {
+        if (n % d == 0) return false;
+    }
+    return true;
+}
+
 int main() {
-    cout << "Hello, World!" << endl;
+    vector<int> primes;
+    for (int n = 2; n <= 30; n++) {
+        if (isPrime(n)) primes.push_back(n);
+    }
+
+    for (int p : primes) {
+        cout << "prime " << setw(2) << p << "  " << setw(4) << p * p << endl;
+    }
+    cout << primes.size() << " primes below 30" << endl;
     return 0;
 }`,
-		rust: `fn main() {
-    println!("Hello, World!");
+		rust: `fn is_prime(n: u32) -> bool {
+    let mut d = 2;
+    while d * d <= n {
+        if n % d == 0 {
+            return false;
+        }
+        d += 1;
+    }
+    true
+}
+
+fn main() {
+    let primes: Vec<u32> = (2..=30).filter(|n| is_prime(*n)).collect();
+
+    for p in &primes {
+        println!("prime {p:>2}  {:>4}", p * p);
+    }
+
+    println!("{} primes below 30", primes.len());
 }`,
 		go: `package main
 
 import "fmt"
 
+func isPrime(n int) bool {
+	for d := 2; d*d <= n; d++ {
+		if n%d == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
-    fmt.Println("Hello, World!")
-}`,
+	primes := []int{}
+	for n := 2; n <= 30; n++ {
+		if isPrime(n) {
+			primes = append(primes, n)
+		}
+	}
+
+	for _, p := range primes {
+		fmt.Printf("prime %2d  %4d\\n", p, p*p)
+	}
+
+	fmt.Printf("%d primes below 30\\n", len(primes))
+}`
 	};
+
+	let languages = $state<Language[]>(FALLBACK_LANGUAGES);
+	let selectedLang = $state('typescript');
+	let codeByLang = $state<Record<string, string>>({ ...DEFAULT_CODE });
+	let stdout = $state('');
+	let stderr = $state('');
+	let stdin = $state('');
+	let notice = $state('');
+	let consoleTab = $state<'output' | 'input'>('output');
+	let running = $state(false);
+	let railOpen = $state(
+		typeof window === 'undefined' ? true : window.innerWidth >= 1200
+	);
+	let consoleHeight = $state(220);
+	let settingsOpen = $state(false);
+	let confirmExample = $state(false);
+
+	let abortController: AbortController | null = null;
+
+	let fontSize = $derived($generalSettings.fontSize);
+	let showLineNumbers = $derived($generalSettings.lineNumbers);
+	let streamEdits = $derived($generalSettings.streamEdits);
+	let autoScroll = $derived($generalSettings.autoScrollStreaming);
+	let editorTheme = $derived($generalSettings.theme);
+
+	let activeLanguage = $derived(
+		languages.find((l) => l.id === selectedLang) ?? FALLBACK_LANGUAGES[0]
+	);
 
 	function loadState() {
 		if (typeof localStorage === 'undefined') return;
 		try {
 			const saved = localStorage.getItem(STORAGE_KEY);
-			if (saved) {
-				const state = JSON.parse(saved);
-				if (state.codePerLang) {
-					Object.entries(state.codePerLang).forEach(([lang, c]) => {
-						if (DEFAULT_CODE[lang]) DEFAULT_CODE[lang] = c as string;
-					});
-				}
-				if (state.selectedLang && DEFAULT_CODE[state.selectedLang]) {
-					selectedLang = state.selectedLang;
-				}
-				if (state.fontSize) fontSize = state.fontSize;
-				if (typeof state.showLineNumbers === 'boolean') showLineNumbers = state.showLineNumbers;
+			if (!saved) return;
+			const state = JSON.parse(saved);
+			if (state.codeByLang) {
+				codeByLang = { ...codeByLang, ...state.codeByLang };
+			}
+			if (state.selectedLang && codeByLang[state.selectedLang] !== undefined) {
+				selectedLang = state.selectedLang;
+			}
+			if (typeof state.railOpen === 'boolean' && window.innerWidth >= 1200) {
+				railOpen = state.railOpen;
+			}
+			if (typeof state.consoleHeight === 'number') {
+				consoleHeight = Math.min(Math.max(state.consoleHeight, 160), 640);
 			}
 		} catch {
 			// ignore corrupted storage
 		}
 	}
 
+	loadState();
+
+	// The editor opens on the program that was last open for this language,
+	// and never on an empty one: an empty program is not a program.
+	let code = $state(untrack(() => codeByLang[selectedLang] || DEFAULT_CODE[selectedLang] || ''));
+
 	function saveState() {
 		if (typeof localStorage === 'undefined') return;
-		const codePerLang: Record<string, string> = {};
-		languages.forEach((l) => {
-			codePerLang[l.id] = DEFAULT_CODE[l.id] ?? '';
-		});
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			codePerLang,
-			selectedLang,
-			fontSize,
-			showLineNumbers,
-		}));
+		localStorage.setItem(
+			STORAGE_KEY,
+			JSON.stringify({ codeByLang, selectedLang, railOpen, consoleHeight })
+		);
+	}
+
+	function exampleCode(): string {
+		return DEFAULT_CODE[selectedLang] ?? '';
 	}
 
 	function selectLanguage(id: string) {
 		selectedLang = id;
-		code = DEFAULT_CODE[id] ?? '';
-		output = '';
+		code = codeByLang[id] || DEFAULT_CODE[id] || '';
+		stdout = '';
 		stderr = '';
-		saveState();
+		notice = '';
+		consoleTab = 'output';
+		confirmExample = false;
+	}
+
+	function requestExample() {
+		const example = exampleCode();
+		if (!example || code === example) return;
+		if (!code.trim()) {
+			// nothing to lose
+			code = example;
+			return;
+		}
+		confirmExample = true;
+	}
+
+	function applyExample() {
+		code = exampleCode();
+		confirmExample = false;
 	}
 
 	$effect(() => {
 		fetch(`${API}/languages`)
-			.then((r) => r.json())
-			.then((data: Language[]) => {
-				languages = data;
-				loadState();
-				if (data.length > 0 && !DEFAULT_CODE[selectedLang]) {
-					selectedLang = data[0].id;
-				}
-				code = DEFAULT_CODE[selectedLang] ?? '';
+			.then((r) => (r.ok ? r.json() : null))
+			.then((data: Language[] | null) => {
+				if (data?.length) languages = data;
+			})
+			.catch(() => {
+				// the interface keeps the built-in list
 			});
 	});
 
 	$effect(() => {
-		if (code && DEFAULT_CODE[selectedLang] !== code) {
-			DEFAULT_CODE[selectedLang] = code;
-			saveState();
-		}
+		codeByLang[selectedLang] = code;
 	});
 
 	$effect(() => {
 		saveState();
 	});
 
-	async function runCode(switchTab = true) {
+	async function runCode() {
 		if (!code.trim() || running) return;
 		running = true;
-		output = '';
+		stdout = '';
 		stderr = '';
-		if (switchTab) outputTab = 'stdout';
+		notice = '';
+		consoleTab = 'output';
+		abortController = new AbortController();
 
 		try {
 			const res = await fetch(API, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ code, language: selectedLang, stdin }),
+				signal: abortController.signal
 			});
 			const data = await res.json();
-			output = data.output ?? '';
+			stdout = data.output ?? '';
 			stderr = data.error ?? '';
-			if (switchTab) outputTab = stderr ? 'stderr' : 'stdout';
 		} catch (err: any) {
-			stderr = `Request failed: ${err.message}`;
-			if (switchTab) outputTab = 'stderr';
+			if (err?.name === 'AbortError') {
+				notice = 'Run stopped before it finished.';
+			} else {
+				stderr = `Request failed: ${err?.message ?? 'unknown error'}`;
+			}
 		} finally {
 			running = false;
+			abortController = null;
 		}
 	}
 
-	function copyToClipboard(text: string, label: string) {
-		navigator.clipboard.writeText(text).then(() => {
-			// could show toast
-			console.log(`${label} copied`);
-		});
+	function stopRun() {
+		abortController?.abort();
 	}
 
 	function copyCode() {
-		copyToClipboard(code, 'Code');
-	}
-
-	function copyOutput() {
-		copyToClipboard(outputTab === 'stdout' ? output : stderr, 'Output');
-	}
-
-	function clearOutput() {
-		output = '';
-		stderr = '';
+		if (code) navigator.clipboard?.writeText(code);
 	}
 
 	function getOutput(): string {
 		const parts: string[] = [];
-		if (output) parts.push(`stdout:\n${output}`);
+		if (stdout) parts.push(`stdout:\n${stdout}`);
 		if (stderr) parts.push(`stderr:\n${stderr}`);
 		return parts.join('\n\n') || '(no output yet)';
 	}
 
 	async function runAndGetOutput(): Promise<string> {
-		await runCode(false);
+		await runCode();
 		return getOutput();
+	}
+
+	function startResize(event: PointerEvent) {
+		event.preventDefault();
+		const startY = event.clientY;
+		const startHeight = consoleHeight;
+
+		const onMove = (ev: PointerEvent) => {
+			const max = Math.max(200, window.innerHeight - 220);
+			consoleHeight = Math.min(max, Math.max(160, startHeight - (ev.clientY - startY)));
+		};
+		const onUp = () => {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			document.body.style.userSelect = '';
+		};
+
+		document.body.style.userSelect = 'none';
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+	}
+
+	function nudgeResize(event: KeyboardEvent) {
+		if (event.key === 'ArrowUp') consoleHeight = Math.min(640, consoleHeight + 16);
+		else if (event.key === 'ArrowDown') consoleHeight = Math.max(160, consoleHeight - 16);
+		else return;
+		event.preventDefault();
 	}
 </script>
 
 <svelte:head>
-	<title>SwafCode</title>
+	<title>SwafCode — a playground for six languages</title>
 </svelte:head>
 
 <div class="app">
-	<header>
-		<h1>Swaf<span>Code</span></h1>
-		<div class="header-controls">
-			<div class="lang-tabs">
-				{#each languages as lang}
-					<button
-						class="lang-tab"
-						class:active={selectedLang === lang.id}
-						onclick={() => selectLanguage(lang.id)}
-					>
-						{lang.name}
-					</button>
-				{/each}
-			</div>
-			<div class="header-actions">
-				<button class="icon-btn" onclick={() => settingsOpen = true} title="AI Settings">⚙️</button>
-				<button class="icon-btn" onclick={() => fontSize = Math.min(24, fontSize + 1)} title="Increase font size">A+</button>
-				<button class="icon-btn" onclick={() => fontSize = Math.max(10, fontSize - 1)} title="Decrease font size">A-</button>
-			</div>
-			<button class="run-btn" onclick={() => runCode()} disabled={running}>
+	<header class="topbar">
+		<div class="brand">
+			<svg
+				class="mark"
+				width="18"
+				height="18"
+				viewBox="0 0 18 18"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.7"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<path d="M3.5 5.5L7.5 9l-4 3.5" />
+				<path d="M9.5 12.5h5" />
+			</svg>
+			<h1>SwafCode</h1>
+		</div>
+
+		<nav class="langs" aria-label="Language">
+			{#each languages as lang (lang.id)}
+				<button
+					class="tab"
+					role="tab"
+					aria-selected={selectedLang === lang.id}
+					title="Runs on {lang.runtime}"
+					onclick={() => selectLanguage(lang.id)}
+				>
+					{lang.name}
+				</button>
+			{/each}
+		</nav>
+
+		<div class="topbar-actions">
+			<button
+				class="icon-btn"
+				title="Settings"
+				aria-label="Settings"
+				onclick={() => (settingsOpen = true)}
+			>
+				<Icon name="settings" />
+			</button>
+			<button
+				class="icon-btn"
+				title="AI agent"
+				aria-label="AI agent"
+				aria-pressed={railOpen}
+				onclick={() => (railOpen = !railOpen)}
+			>
+				<Icon name="agent" />
+			</button>
+			{#if running}
+				<button class="btn btn--text stop" onclick={stopRun}>
+					<Icon name="stop" size={13} />
+					Stop
+				</button>
+			{/if}
+			<button class="btn btn--primary run" onclick={runCode} disabled={running}>
 				{#if running}
-					<span class="spinner"></span> Running...
-				{:else}
-					▶ Run
+					<span class="spinner" aria-hidden="true"></span>
 				{/if}
+				<span>{running ? 'Running' : 'Run'}</span>
+				<span class="kbd run-key">{runShortcut}</span>
 			</button>
 		</div>
 	</header>
 
-	<main>
-		<div class="panel editor-panel">
-			<div class="panel-header">
-				<span class="panel-title">Editor</span>
-				<div class="editor-actions">
-					<label class="checkbox-label">
-						<input type="checkbox" checked={showLineNumbers} onchange={() => showLineNumbers = !showLineNumbers} />
-						<span>Line numbers</span>
-					</label>
-					<label class="checkbox-label">
-						<input type="checkbox" checked={streamingEdits} onchange={() => streamingEdits = !streamingEdits} />
-						<span>Streaming</span>
-					</label>
-					<button class="icon-btn secondary" onclick={copyCode} title="Copy code (Ctrl+C)">📋</button>
+	<div class="workspace">
+		<div class="workbench" style:--console-h="{consoleHeight}px">
+			<section class="panel editor">
+				<div class="panel-head">
+					<h2 class="panel-title">Editor</h2>
+					<span class="chip">{activeLanguage.filename}</span>
+					<div class="panel-actions">
+						<button
+							class="btn btn--text example-btn"
+							title="Load the {activeLanguage.name} example program"
+							onclick={requestExample}
+						>
+							Example
+						</button>
+						<button
+							class="icon-btn"
+							title="Copy code"
+							aria-label="Copy code"
+							onclick={copyCode}
+						>
+							<Icon name="copy" />
+						</button>
+					</div>
 				</div>
-			</div>
-			<CodeEditor bind:code language={selectedLang} onRun={runCode} theme={editorThemeDerived} {fontSize} {showLineNumbers} streaming={streamingEdits} autoScroll={autoScrollStreaming} />
-		</div>
 
-		<div class="panel output-panel">
-			<div class="panel-header">
-				<div class="output-tabs">
-					<button
-						class="tab"
-						class:active={outputTab === 'stdout'}
-						onclick={() => (outputTab = 'stdout')}
-					>
-						Output
-					</button>
-					<button
-						class="tab"
-						class:active={outputTab === 'stderr'}
-						onclick={() => (outputTab = 'stderr')}
-					>
-						Errors
-						{#if stderr}<span class="badge"></span>{/if}
-					</button>
-					<button
-						class="tab"
-						class:active={outputTab === 'stdin'}
-						onclick={() => (outputTab = 'stdin')}
-					>
-						Stdin
-					</button>
-					<button
-						class="tab"
-						class:active={outputTab === 'ai'}
-						onclick={() => (outputTab = 'ai')}
-					>
-						AI Agent
-					</button>
-				</div>
-				{#if outputTab !== 'ai' && outputTab !== 'stdin'}
-					<div class="output-actions">
-						<button class="icon-btn secondary" onclick={copyOutput} title="Copy output">📋</button>
-						<button class="icon-btn secondary" onclick={clearOutput} title="Clear output">🗑️</button>
+				{#if confirmExample}
+					<div class="confirm">
+						<p class="confirm-text">
+							Replace the program with the {activeLanguage.name} example?
+						</p>
+						<div class="confirm-actions">
+							<button class="btn btn--text" onclick={() => (confirmExample = false)}>
+								Keep
+							</button>
+							<button class="btn btn--quiet" onclick={applyExample}>Replace</button>
+						</div>
 					</div>
 				{/if}
-			</div>
-			<pre class="output-content" class:hidden={outputTab === 'ai' || outputTab === 'stdin'}><code>{outputTab === 'stdout' ? output : stderr || 'No errors.'}</code></pre>
-			<div class="stdin-wrapper" class:hidden={outputTab !== 'stdin'}>
-				<textarea bind:value={stdin} placeholder="Enter input for your program..." rows="10"></textarea>
-			</div>
-			<div class="ai-wrapper" class:hidden={outputTab !== 'ai'}>
-				<AiChat bind:code language={selectedLang} getOutput={getOutput} runCode={runAndGetOutput} embedded streaming={streamingEdits} />
-			</div>
-		</div>
-	</main>
 
-	<ApiSettings open={settingsOpen} onClose={() => settingsOpen = false} />
+				<CodeEditor
+					bind:code
+					language={selectedLang}
+					onRun={runCode}
+					theme={editorTheme}
+					{fontSize}
+					{showLineNumbers}
+					streaming={streamEdits}
+					autoScroll={autoScroll}
+				/>
+			</section>
+
+			<div
+				class="resizer"
+				role="slider"
+				aria-orientation="horizontal"
+				aria-label="Console height"
+				aria-valuemin={160}
+				aria-valuemax={640}
+				aria-valuenow={Math.round(consoleHeight)}
+				aria-valuetext="{Math.round(consoleHeight)} pixels"
+				tabindex="0"
+				onpointerdown={startResize}
+				onkeydown={nudgeResize}
+			></div>
+
+			<ConsolePanel
+				bind:stdout
+				bind:stderr
+				bind:stdin
+				bind:tab={consoleTab}
+				bind:notice
+				shortcut={runShortcut}
+			/>
+		</div>
+
+		<aside class="rail" class:open={railOpen} aria-label="AI agent">
+			<AiChat
+				bind:code
+				language={selectedLang}
+				{getOutput}
+				runCode={runAndGetOutput}
+				streaming={streamEdits}
+				onClose={() => (railOpen = false)}
+				onOpenSettings={() => (settingsOpen = true)}
+			/>
+		</aside>
+	</div>
 </div>
+
+<SettingsDialog bind:open={settingsOpen} onClose={() => (settingsOpen = false)} />
 
 <style>
 	.app {
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		transition: background 0.2s, color 0.2s;
+		height: 100dvh;
+		overflow: hidden;
 	}
 
-	/* Header */
-	header {
+	/* ---- Top bar ------------------------------------------- */
+
+	.topbar {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		padding: 12px 20px;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-primary);
+		gap: 24px;
+		height: var(--bar-h);
+		flex: none;
+		padding: 0 16px;
+		border-bottom: 1px solid var(--border);
+		background: var(--ground);
 	}
 
-	h1 {
-		font-size: 1.3rem;
-		font-weight: 700;
-		color: var(--text-bright);
-	}
-
-	h1 span {
-		color: var(--accent-primary);
-	}
-
-	.header-controls {
+	.brand {
 		display: flex;
 		align-items: center;
-		gap: 16px;
+		gap: 9px;
 	}
 
-	.lang-tabs {
-		display: flex;
-		gap: 4px;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-primary);
-		border-radius: 8px;
-		padding: 3px;
+	.mark {
+		color: var(--text);
 	}
 
-	.lang-tab {
-		padding: 6px 16px;
-		border: none;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 0.85rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.lang-tab:hover {
-		color: var(--text-primary);
-		background: var(--bg-hover);
-	}
-
-	.lang-tab.active {
-		background: var(--bg-tertiary);
-		color: var(--text-bright);
-	}
-
-	.header-actions {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.icon-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border: none;
-		border-radius: 6px;
-		background: var(--bg-tertiary);
-		color: var(--text-primary);
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.icon-btn:hover {
-		background: var(--bg-hover);
-	}
-
-	.icon-btn.secondary {
-		background: var(--bg-tertiary);
-		font-size: 0.8rem;
-		padding: 0 8px;
-		width: auto;
-	}
-
-	.run-btn {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 8px 20px;
-		border: none;
-		border-radius: 8px;
-		background: var(--accent-success);
-		color: var(--text-inverse);
-		font-size: 0.9rem;
+	.brand h1 {
+		font-size: var(--fs-title);
 		font-weight: 600;
-		cursor: pointer;
-		transition: background 0.15s;
+		letter-spacing: -0.01em;
 	}
 
-	.run-btn:hover:not(:disabled) {
-		background: var(--accent-success-hover);
+	.langs {
+		display: flex;
+		align-items: stretch;
+		height: 100%;
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
 	}
 
-	.run-btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+	.langs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.topbar-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-left: auto;
+	}
+
+	.run {
+		padding: 0 12px 0 14px;
+		gap: 8px;
+	}
+
+	.run[disabled] {
+		opacity: 1;
+		cursor: default;
+	}
+
+	.run-key {
+		background: rgba(127, 127, 127, 0.28);
+		color: inherit;
+	}
+
+	.stop {
+		color: var(--negative);
+		gap: 6px;
 	}
 
 	.spinner {
-		width: 14px;
-		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: #fff;
+		width: 12px;
+		height: 12px;
+		border: 1.6px solid currentColor;
+		border-top-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
+		animation: spin 0.7s linear infinite;
 	}
 
 	@keyframes spin {
@@ -429,148 +613,136 @@ func main() {
 		}
 	}
 
-	/* Main layout */
-	main {
-		display: flex;
+	/* ---- Workspace ----------------------------------------- */
+
+	.workspace {
+		display: grid;
+		grid-template-columns: 1fr auto;
 		flex: 1;
-		overflow: hidden;
+		min-height: 0;
 	}
 
-	.panel {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
+	.workbench {
+		display: grid;
+		grid-template-rows: 1fr 6px var(--console-h);
+		min-height: 0;
 		min-width: 0;
 	}
 
-	.editor-panel {
-		border-right: 1px solid var(--border-primary);
+	.editor {
+		min-height: 0;
 	}
 
-	.panel-header {
+	.example-btn {
+		height: 26px;
+		font-size: var(--fs-small);
+	}
+
+	.confirm {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 12px;
+		flex: none;
 		padding: 8px 16px;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--border-primary);
-		min-height: 40px;
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
 	}
 
-	.editor-actions,
-	.output-actions {
+	.confirm-text {
+		font-size: var(--fs-small);
+		color: var(--text);
+	}
+
+	.confirm-actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-	}
-
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 0.8rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-	}
-
-	.checkbox-label input {
-		accent-color: var(--accent-success);
-	}
-
-	.panel-title {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	/* Output panel */
-	.output-tabs {
-		display: flex;
 		gap: 4px;
+		margin-left: auto;
 	}
 
-	.tab {
-		padding: 4px 12px;
-		border: none;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 0.8rem;
-		font-weight: 500;
-		cursor: pointer;
+	.confirm-actions .btn {
+		height: 26px;
+		font-size: var(--fs-small);
+	}
+
+	.resizer {
 		position: relative;
-		transition: all 0.15s;
+		cursor: row-resize;
+		background: transparent;
 	}
 
-	.tab:hover {
-		color: var(--text-primary);
-	}
-
-	.tab.active {
-		background: var(--bg-tertiary);
-		color: var(--text-bright);
-	}
-
-	.badge {
+	.resizer::after {
+		content: '';
 		position: absolute;
-		top: 4px;
-		right: 4px;
-		width: 7px;
-		height: 7px;
-		background: var(--accent-error);
-		border-radius: 50%;
+		left: 0;
+		right: 0;
+		top: 2px;
+		height: 1px;
+		background: var(--border);
 	}
 
-	.output-content {
-		flex: 1;
-		padding: 16px;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-		font-size: 0.85rem;
-		line-height: 1.6;
-		overflow: auto;
-		white-space: pre-wrap;
-		word-break: break-word;
-		margin: 0;
+	.resizer:hover::after,
+	.resizer:focus-visible::after {
+		background: var(--control);
 	}
 
-	.ai-wrapper {
-		flex: 1;
-		min-height: 0;
+	.rail {
+		width: 372px;
+		min-width: 0;
+		border-left: 1px solid var(--border);
 		display: flex;
 		flex-direction: column;
-	}
-
-	.stdin-wrapper {
-		flex: 1;
 		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		padding: 16px;
+		background: var(--ground);
 	}
 
-	.stdin-wrapper textarea {
-		flex: 1;
-		resize: none;
-		background: var(--bg-input);
-		border: 1px solid var(--border-primary);
-		border-radius: 8px;
-		color: var(--text-primary);
-		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-		font-size: 0.85rem;
-		line-height: 1.6;
-		padding: 12px;
-		outline: none;
+	@media (max-width: 1100px) {
+		.rail {
+			position: fixed;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: min(400px, 100%);
+			z-index: 60;
+			transform: translateX(101%);
+			transition: transform 0.2s ease;
+			box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35); /* taste-skill-ignore: a real overlay floats */
+		}
+
+		.rail.open {
+			transform: none;
+		}
+
+		.workspace {
+			grid-template-columns: 1fr;
+		}
 	}
 
-	.stdin-wrapper textarea:focus {
-		border-color: var(--border-focus);
-	}
+	@media (max-width: 900px) {
+		.topbar {
+			flex-wrap: wrap;
+			height: auto;
+			gap: 0 12px;
+			padding: 0 16px;
+		}
 
-	.hidden {
-		display: none;
+		.brand {
+			height: var(--bar-h);
+		}
+
+		.topbar-actions {
+			height: var(--bar-h);
+		}
+
+		.langs {
+			order: 3;
+			width: 100%;
+			height: 40px;
+			border-top: 1px solid var(--rule);
+		}
+
+		.tab {
+			margin-right: 20px;
+		}
 	}
 </style>

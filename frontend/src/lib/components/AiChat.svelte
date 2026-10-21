@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { aiSettings } from '$lib/stores/ai-settings';
 	import { marked } from 'marked';
+	import Icon from './Icon.svelte';
 
 	type Role = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -23,15 +24,17 @@
 		language = 'typescript',
 		getOutput = () => '',
 		runCode = async () => '',
-		embedded = false,
 		streaming = true,
+		onClose = () => {},
+		onOpenSettings = () => {}
 	}: {
 		code: string;
 		language: string;
 		getOutput?: () => string;
 		runCode?: () => Promise<string>;
-		embedded?: boolean;
 		streaming?: boolean;
+		onClose?: () => void;
+		onOpenSettings?: () => void;
 	} = $props();
 
 	let messages = $state<Message[]>([]);
@@ -47,8 +50,8 @@
 			function: {
 				name: 'get_code',
 				description: 'Get the current code in the editor',
-				parameters: { type: 'object', properties: {}, required: [] },
-			},
+				parameters: { type: 'object', properties: {}, required: [] }
+			}
 		},
 		{
 			type: 'function',
@@ -58,9 +61,9 @@
 				parameters: {
 					type: 'object',
 					properties: { code: { type: 'string', description: 'The full new code' } },
-					required: ['code'],
-				},
-			},
+					required: ['code']
+				}
+			}
 		},
 		{
 			type: 'function',
@@ -70,18 +73,24 @@
 				parameters: {
 					type: 'object',
 					properties: { code: { type: 'string', description: 'The code to append' } },
-					required: ['code'],
-				},
-			},
+					required: ['code']
+				}
+			}
 		},
 		{
 			type: 'function',
 			function: {
 				name: 'run_code',
 				description: 'Run the current code and return its output or errors',
-				parameters: { type: 'object', properties: {}, required: [] },
-			},
-		},
+				parameters: { type: 'object', properties: {}, required: [] }
+			}
+		}
+	];
+
+	const SUGGESTIONS = [
+		'Explain what this program does',
+		'Find the bug in this code',
+		'Write a test for this function'
 	];
 
 	function systemPrompt(): string {
@@ -102,7 +111,7 @@
 					role: 'tool',
 					content: m.content,
 					tool_call_id: m.toolCallId,
-					name: m.name,
+					name: m.name
 				};
 			}
 			if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -112,8 +121,8 @@
 					tool_calls: m.toolCalls.map((tc) => ({
 						id: tc.id,
 						type: 'function',
-						function: { name: tc.function.name, arguments: tc.function.arguments },
-					})),
+						function: { name: tc.function.name, arguments: tc.function.arguments }
+					}))
 				};
 			}
 			return { role: m.role, content: m.content };
@@ -121,7 +130,12 @@
 	}
 
 	async function executeTool(call: ToolCall): Promise<string> {
-		const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+		let args: Record<string, any> = {};
+		try {
+			args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+		} catch {
+			args = {};
+		}
 		switch (call.function.name) {
 			case 'get_code':
 				return code || '// (empty)';
@@ -172,23 +186,23 @@
 	async function streamTurn(
 		turnMessages: Message[],
 		onDelta: (text: string) => void,
-		signal?: AbortSignal,
+		signal?: AbortSignal
 	): Promise<{ content: string; toolCalls: ToolCall[] }> {
 		const settings = $aiSettings;
 		const res = await fetch(`${settings.baseUrl.replace(/\/$/, '')}/chat/completions`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${settings.apiKey}`,
+				Authorization: `Bearer ${settings.apiKey}`
 			},
 			body: JSON.stringify({
 				model: settings.model,
 				messages: [{ role: 'system', content: systemPrompt() }, ...toApiMessages(turnMessages)],
 				tools: TOOLS,
 				tool_choice: 'auto',
-				stream: true,
+				stream: true
 			}),
-			signal,
+			signal
 		});
 
 		if (!res.ok || !res.body) {
@@ -248,17 +262,23 @@
 		return { content, toolCalls };
 	}
 
-	async function send() {
-		const text = input.trim();
-		if (!text || loading) return;
+	async function send(text?: string) {
+		const prompt = (text ?? input).trim();
+		if (!prompt || loading) return;
 
 		const settings = $aiSettings;
 		if (!settings.apiKey) {
-			messages = [...messages, { role: 'assistant', content: 'Please configure your API key in Settings (gear icon).' }];
+			messages = [
+				...messages,
+				{
+					role: 'assistant',
+					content: 'Add an API key in Settings before the agent can run.'
+				}
+			];
 			return;
 		}
 
-		messages = [...messages, { role: 'user', content: text }];
+		messages = [...messages, { role: 'user', content: prompt }];
 		input = '';
 		loading = true;
 		abortController = new AbortController();
@@ -273,23 +293,30 @@
 			for (let round = 0; round < maxRounds; round++) {
 				streamingContent = '';
 				let latest = '';
-				const { content, toolCalls } = await streamTurn(messages, (t) => {
-					latest = t;
-					streamingContent = t;
-					requestAnimationFrame(doAutoScroll);
-				}, abortController.signal);
+				const { content, toolCalls } = await streamTurn(
+					messages,
+					(t) => {
+						latest = t;
+						streamingContent = t;
+						requestAnimationFrame(doAutoScroll);
+					},
+					abortController.signal
+				);
 
 				if (toolCalls.length) {
 					messages = [...messages, { role: 'assistant', content, toolCalls }];
 					streamingContent = '';
 					for (const call of toolCalls) {
 						const result = await executeTool(call);
-						messages = [...messages, {
-							role: 'tool',
-							content: result,
-							toolCallId: call.id,
-							name: call.function.name,
-						}];
+						messages = [
+							...messages,
+							{
+								role: 'tool',
+								content: result,
+								toolCallId: call.id,
+								name: call.function.name
+							}
+						];
 					}
 					followIfAtBottom();
 					continue;
@@ -305,7 +332,7 @@
 			if (err?.name === 'AbortError') {
 				messages = [...messages, { role: 'assistant', content: partial || '(stopped)' }];
 			} else {
-				messages = [...messages, { role: 'assistant', content: `⚠️ ${err.message}` }];
+				messages = [...messages, { role: 'assistant', content: `Request failed: ${err.message}` }];
 			}
 		} finally {
 			loading = false;
@@ -335,36 +362,71 @@
 	}
 </script>
 
-<div class="chat-panel" class:embedded>
-	<div class="chat-header">
-		{#if !embedded}
-			<span class="panel-title">AI Agent</span>
-		{:else}
-			<span></span>
-		{/if}
-		<button class="icon-btn" onclick={clearChat} title="Clear chat">🗑️</button>
+<div class="agent">
+	<div class="panel-head">
+		<h2 class="panel-title">AI agent</h2>
+		<div class="panel-actions">
+			<button
+				class="icon-btn"
+				title="Clear conversation"
+				aria-label="Clear conversation"
+				onclick={clearChat}
+			>
+				<Icon name="trash" />
+			</button>
+			<button class="icon-btn close" aria-label="Close the agent panel" onclick={onClose}>
+				<Icon name="close" />
+			</button>
+		</div>
 	</div>
 
-	<div class="messages" bind:this={chatContainer}>
+	<div class="transcript" bind:this={chatContainer}>
 		{#if messages.length === 0}
 			<div class="empty">
-				<p>Ask the agent to help with your code.</p>
-				<p class="muted">It can read, edit, and run the code in the editor.</p>
+				{#if !$aiSettings.apiKey}
+					<p class="empty-title">The agent needs an API key</p>
+					<p class="empty-note">
+						Point it at any OpenAI-compatible endpoint — OpenAI, Ollama or LM Studio.
+					</p>
+					<button class="btn btn--quiet" onclick={onOpenSettings}>Open settings</button>
+
+					<div class="capabilities">
+						<p class="cap-title">What it can do</p>
+						<ul>
+							<li>Read the program in the editor</li>
+							<li>Rewrite or extend it</li>
+							<li>Run it and read the result</li>
+						</ul>
+					</div>
+				{:else}
+					<p class="empty-title">Ask the agent to change the code</p>
+					<p class="empty-note">
+						It can read the editor, rewrite the program and run it to check the result.
+					</p>
+					<div class="suggestions">
+						{#each SUGGESTIONS as suggestion}
+							<button class="suggestion" onclick={() => send(suggestion)}>
+								<Icon name="right" size={14} />
+								<span>{suggestion}</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		{:else}
 			{#each messages as msg, i (i)}
 				<div class="message {msg.role}">
 					{#if msg.role === 'user'}
-						<div class="bubble user">{msg.content}</div>
+						<p class="role">You</p>
+						<div class="body">{msg.content}</div>
 					{:else if msg.role === 'assistant'}
 						{#if msg.content}
-							<div class="bubble assistant">
-								<div class="md">{@html renderMarkdown(msg.content)}</div>
-							</div>
+							<p class="role">Agent</p>
+							<div class="body md">{@html renderMarkdown(msg.content)}</div>
 						{/if}
 					{:else if msg.role === 'tool'}
-						<div class="bubble tool">
-							<span class="tool-name">{msg.name}()</span>
+						<div class="tool">
+							<span class="tool-name">{msg.name}</span>
 							<pre>{msg.content}</pre>
 						</div>
 					{/if}
@@ -372,279 +434,247 @@
 			{/each}
 			{#if streamingContent}
 				<div class="message assistant">
-					<div class="bubble assistant streaming">
-						{#if streamingContent}
-							<div class="md">{@html renderMarkdown(streamingContent)}</div>
-						{/if}
-					</div>
+					<p class="role">Agent</p>
+					<div class="body md">{@html renderMarkdown(streamingContent)}</div>
 				</div>
 			{:else if loading}
-				<div class="bubble assistant typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+				<div class="message assistant">
+					<p class="role">Agent</p>
+					<div class="typing"><span></span><span></span><span></span></div>
+				</div>
 			{/if}
 		{/if}
 	</div>
 
-	<div class="input-row">
+	<div class="composer">
 		<textarea
 			bind:value={input}
 			onkeydown={onKeydown}
-			placeholder="Ask the agent..."
+			placeholder="Ask the agent…"
 			rows="2"
+			aria-label="Message the agent"
 		></textarea>
 		{#if loading}
-			<button class="stop-btn" onclick={stop} disabled={!loading}>Stop</button>
-		{:else}
-			<button class="send-btn" onclick={send} disabled={!input.trim()}>
-				Send
+			<button class="btn btn--quiet stop" onclick={stop}>
+				<Icon name="stop" size={14} />
+				Stop
 			</button>
+		{:else}
+			<button class="btn btn--quiet" onclick={() => send()} disabled={!input.trim()}>Send</button>
 		{/if}
 	</div>
 </div>
 
 <style>
-	.chat-panel {
+	.agent {
 		display: flex;
 		flex-direction: column;
-		width: 380px;
-		min-width: 280px;
-		border-left: 1px solid var(--border-primary);
-		background: var(--bg-primary);
 		min-height: 0;
-	}
-
-	.chat-panel.embedded {
-		width: auto;
-		min-width: 0;
 		flex: 1;
-		border-left: none;
-		background: transparent;
 	}
 
-	.chat-panel.embedded .chat-header {
-		background: transparent;
-		border-bottom: none;
-		min-height: 0;
-		padding: 8px 0 0 0;
+	.close {
+		display: none;
 	}
 
-	.chat-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 8px 16px;
-		background: var(--bg-secondary);
-		border-bottom: 1px solid var(--bg-hover);
-		min-height: 40px;
+	@media (max-width: 1100px) {
+		.close {
+			display: inline-flex;
+		}
 	}
 
-	.panel-title {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.icon-btn {
-		background: none;
-		border: none;
-		color: var(--text-secondary);
-		cursor: pointer;
-		font-size: 0.85rem;
-	}
-
-	.icon-btn:hover {
-		color: var(--text-bright);
-	}
-
-	.messages {
+	.transcript {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
 		padding: 16px;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 20px;
 	}
 
 	.empty {
-		margin: auto;
-		text-align: center;
-		color: var(--text-secondary);
-		font-size: 0.85rem;
+		padding-top: 2px;
 	}
 
-	.empty .muted {
-		color: var(--text-muted);
-		font-size: 0.75rem;
+	.empty-title {
+		font-size: var(--fs-body);
+		font-weight: 600;
+		color: var(--text);
+	}
+
+	.empty-note {
 		margin-top: 4px;
-	}
-
-	.message {
-		display: flex;
-	}
-
-	.bubble {
-		max-width: 100%;
-		padding: 10px 12px;
-		border-radius: 10px;
-		font-size: 0.85rem;
+		font-size: var(--fs-small);
+		color: var(--muted);
 		line-height: 1.5;
+	}
+
+	.empty .btn {
+		margin-top: 14px;
+	}
+
+	.capabilities {
+		margin-top: 28px;
+		padding-top: 18px;
+		border-top: 1px solid var(--rule);
+	}
+
+	.cap-title {
+		font-size: var(--fs-micro);
+		color: var(--faint);
+		margin-bottom: 8px;
+	}
+
+	.capabilities ul {
+		list-style: disc;
+		padding-left: 16px;
+	}
+
+	.capabilities li {
+		font-size: var(--fs-small);
+		color: var(--muted);
+		line-height: 1.7;
+	}
+
+	.capabilities li::marker {
+		color: var(--faint);
+	}
+
+	.suggestions {
+		margin-top: 16px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+
+	.suggestion {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 8px 6px 0;
+		font-size: var(--fs-small);
+		color: var(--muted);
+		text-align: left;
+		transition: color 0.12s ease;
+	}
+
+	.suggestion:hover {
+		color: var(--text);
+	}
+
+	.suggestion :global(svg) {
+		color: var(--faint);
+	}
+
+	.role {
+		font-size: var(--fs-micro);
+		color: var(--faint);
+		margin-bottom: 4px;
+	}
+
+	.body {
+		font-size: var(--fs-body);
+		line-height: 1.55;
+		color: var(--text);
+		white-space: pre-wrap;
 		word-break: break-word;
 	}
 
-	.bubble.user {
-		background: var(--accent-primary);
-		color: #fff;
-		margin-left: auto;
-		border-bottom-right-radius: 2px;
+	.tool {
+		background: var(--raised);
+		border-radius: var(--radius-card);
+		padding: 10px 12px;
+		font-family: var(--font-code);
+		font-size: var(--fs-micro);
+		color: var(--muted);
 	}
 
-	.bubble.assistant {
-		background: var(--bg-tertiary);
-		color: var(--text-primary);
-		border-bottom-left-radius: 2px;
+	.tool-name {
+		display: block;
+		color: var(--text);
+		font-weight: 500;
+		margin-bottom: 4px;
 	}
 
-	.bubble :global(.md p) {
-		margin: 0 0 8px;
-	}
-
-	.bubble :global(.md p:last-child) {
-		margin-bottom: 0;
-	}
-
-	.bubble :global(.md code) {
-		background: var(--bg-tertiary);
-		padding: 1px 4px;
-		border-radius: 4px;
-		font-family: 'SF Mono', 'Fira Code', monospace;
-		font-size: 0.8rem;
-	}
-
-	.bubble :global(.md pre) {
-		background: var(--bg-primary);
-		padding: 8px 10px;
-		border-radius: 6px;
-		overflow-x: auto;
-		margin: 6px 0;
-	}
-
-	.bubble :global(.md pre code) {
-		background: none;
-		padding: 0;
+	.tool pre {
+		margin: 0;
+		white-space: pre-wrap;
+		word-break: break-word;
 	}
 
 	.typing {
 		display: flex;
 		gap: 4px;
 		align-items: center;
+		height: 18px;
 	}
 
-	.dot {
-		width: 6px;
-		height: 6px;
-		background: var(--text-secondary);
+	.typing span {
+		width: 5px;
+		height: 5px;
 		border-radius: 50%;
+		background: var(--faint);
 		animation: blink 1.2s infinite;
 	}
 
-	.dot:nth-child(2) {
+	.typing span:nth-child(2) {
 		animation-delay: 0.2s;
 	}
 
-	.dot:nth-child(3) {
+	.typing span:nth-child(3) {
 		animation-delay: 0.4s;
 	}
 
 	@keyframes blink {
-		0%, 80%, 100% { opacity: 0.3; }
-		40% { opacity: 1; }
+		0%,
+		80%,
+		100% {
+			opacity: 0.3;
+		}
+		40% {
+			opacity: 1;
+		}
 	}
 
-	.input-row {
+	.composer {
 		display: flex;
 		gap: 8px;
-		padding: 10px 12px;
-		border-top: 1px solid var(--bg-hover);
-		background: var(--bg-secondary);
+		align-items: flex-end;
+		padding: 12px 16px;
+		border-top: 1px solid var(--border);
 	}
 
-	.input-row textarea {
+	.composer textarea {
 		flex: 1;
+		min-width: 0;
 		resize: none;
-		background: var(--bg-primary);
-		border: 1px solid var(--bg-hover);
-		border-radius: 8px;
-		color: var(--text-bright);
-		font-family: inherit;
-		font-size: 0.85rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-card);
+		color: var(--text);
+		font-family: var(--font-sans);
+		font-size: var(--fs-body);
+		line-height: 1.5;
 		padding: 8px 10px;
+	}
+
+	.composer textarea:focus {
 		outline: none;
+		border-color: var(--accent);
 	}
 
-	.input-row textarea:focus {
-		border-color: var(--accent-primary);
+	.composer textarea::placeholder {
+		color: var(--faint);
 	}
 
-	.send-btn {
-		background: var(--accent-success);
-		color: #fff;
-		border: none;
-		border-radius: 8px;
-		padding: 0 16px;
-		font-size: 0.85rem;
-		font-weight: 600;
-		cursor: pointer;
+	.composer .btn {
+		height: 34px;
+		border: 1px solid var(--border);
 	}
 
-	.send-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.send-btn:hover:not(:disabled) {
-		background: var(--accent-success-hover);
-	}
-
-	.stop-btn {
-		background: var(--accent-error);
-		color: #fff;
-		border: none;
-		border-radius: 8px;
-		padding: 0 16px;
-		font-size: 0.85rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.stop-btn:hover {
-		background: var(--accent-error-hover);
-	}
-
-	.bubble.streaming {
-		border: 1px solid var(--accent-primary);
-	}
-
-	.bubble.tool {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-primary);
-		color: var(--text-secondary);
-		max-width: 100%;
-		font-family: 'SF Mono', 'Fira Code', monospace;
-		font-size: 0.78rem;
-	}
-
-	.bubble.tool .tool-name {
-		display: block;
-		color: var(--accent-primary);
-		font-weight: 600;
-		margin-bottom: 4px;
-	}
-
-	.bubble.tool pre {
-		margin: 0;
-		white-space: pre-wrap;
-		word-break: break-word;
+	.stop {
+		color: var(--negative);
 	}
 </style>

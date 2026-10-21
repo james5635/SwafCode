@@ -1,0 +1,578 @@
+/* ============================================================
+   SwafCode — application tokens and base styles
+   Style: data terminal (see .taste-skill/direction.json)
+   Move: every selection is a 1px accent line as wide as its
+   label, placed on the nearest existing edge.
+   ============================================================ */
+
+/* ---- Theme palettes ---------------------------------------
+   One ground everywhere, divided by 1px rules. The editor, the
+   console and the agent rail all sit on --ground; the chrome
+   recedes into --surface and only floating things get a shadow.
+   The CodeMirror theme is overridden below so the editor always
+   matches the shell it sits in.
+   ------------------------------------------------------------ */
+
+:root,
+:root[data-theme='swaf'],
+:root[data-theme='onedark'] {
+	--ground: #282c34;
+	--surface: #21252b;
+	--raised: #31353d;
+	--border: #3e4451;
+	--rule: #2c313a;
+	--control: #4b5263;
+
+	--text: #c8cdd8;
+	--muted: #a3acbb;
+	--faint: #959ead;
+
+	--accent: #61afef;
+	--negative: #e48087;
+	--positive: #98c379;
+
+	--editor-active: rgba(255, 255, 255, 0.035);
+	--editor-selection: rgba(97, 175, 239, 0.26);
+
+	--shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='light'] {
+	--ground: #ffffff;
+	--surface: #f7f8f9;
+	--raised: #f0f2f5;
+	--border: #d8dce1;
+	--rule: #e8eaee;
+	--control: #c3c9d0;
+
+	--text: #1b1f24;
+	--muted: #5b6470;
+	--faint: #666e7a;
+
+	--accent: #1d5fbf;
+	--negative: #b42318;
+	--positive: #1a7f4b;
+
+	--editor-active: rgba(27, 31, 36, 0.04);
+	--editor-selection: rgba(29, 95, 191, 0.18);
+
+	--shadow: 0 12px 32px rgba(16, 24, 40, 0.1);
+}
+
+:root[data-theme='monokai'] {
+	--ground: #272822;
+	--surface: #1e1f1a;
+	--raised: #34352d;
+	--border: #49483e;
+	--rule: #3a3a32;
+	--control: #5a5950;
+
+	--text: #e8e6d8;
+	--muted: #aaa68f;
+	--faint: #a09e8b;
+
+	--accent: #66d9ef;
+	--negative: #fb6b9f;
+	--positive: #a6e22e;
+
+	--editor-active: rgba(255, 255, 255, 0.04);
+	--editor-selection: rgba(102, 217, 239, 0.22);
+
+	--shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='vscode'] {
+	--ground: #1e1e1e;
+	--surface: #181818;
+	--raised: #2d2d2d;
+	--border: #3c3c3c;
+	--rule: #2d2d2d;
+	--control: #4a4a4a;
+
+	--text: #d4d4d4;
+	--muted: #a0a0a0;
+	--faint: #959595;
+
+	--accent: #569cd6;
+	--negative: #f66363;
+	--positive: #4ec9b0;
+
+	--editor-active: rgba(255, 255, 255, 0.035);
+	--editor-selection: rgba(86, 156, 214, 0.28);
+
+	--shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='github'] {
+	--ground: #0d1117;
+	--surface: #010409;
+	--raised: #161b22;
+	--border: #30363d;
+	--rule: #21262d;
+	--control: #484f58;
+
+	--text: #e6edf3;
+	--muted: #9198a1;
+	--faint: #7d8590;
+
+	--accent: #58a6ff;
+	--negative: #f85149;
+	--positive: #3fb950;
+
+	--editor-active: rgba(255, 255, 255, 0.04);
+	--editor-selection: rgba(56, 166, 255, 0.28);
+
+	--shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='gruvbox'] {
+	--ground: #282828;
+	--surface: #1d2021;
+	--raised: #32302f;
+	--border: #3c3836;
+	--rule: #32302f;
+	--control: #504945;
+
+	--text: #ebdbb2;
+	--muted: #bdae93;
+	--faint: #a89984;
+
+	--accent: #fabd2f;
+	--negative: #fc6756;
+	--positive: #b8bb26;
+
+	--editor-active: rgba(255, 255, 255, 0.04);
+	--editor-selection: rgba(250, 189, 47, 0.22);
+
+	--shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Type and shape -------------------------------------- */
+
+:root {
+	--font-sans: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	/* The style's face: every figure and every line of code is set in one
+	   monospace, the interface text in Public Sans. */
+	--font-code: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; /* taste-skill-ignore */
+
+	--fs-title: 15px;
+	--fs-section: 14px;
+	--fs-body: 13px;
+	--fs-small: 12px;
+	--fs-micro: 11px;
+
+	--radius-card: 6px;
+	--radius-control: 999px;
+	--radius-chip: 4px;
+
+	--bar-h: 48px;
+	--head-h: 38px;
+	--gap: 16px;
+	--pad: 20px;
+	--control-h: 32px;
+}
+
+/* ---- Reset ------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	font-family: var(--font-sans);
+	font-size: var(--fs-body);
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+	background: var(--ground);
+	color: var(--text);
+	overflow: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
+h1,
+h2,
+h3 {
+	font-size: inherit;
+	font-weight: inherit;
+}
+
+svg {
+	display: block;
+	flex: none;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 3px;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--border);
+	border: 3px solid transparent;
+	background-clip: content-box;
+	border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--control);
+	background-clip: content-box;
+}
+
+/* ---- Shared controls ------------------------------------- */
+
+.num {
+	font-variant-numeric: tabular-nums;
+}
+
+/* A pill button. One filled primary per screen; the rest are quiet. */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: var(--control-h);
+	padding: 0 14px;
+	border-radius: var(--radius-control);
+	font-size: var(--fs-body);
+	font-weight: 500;
+	color: var(--text);
+	transition: background-color 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+	white-space: nowrap;
+}
+
+.btn--primary {
+	background: var(--text);
+	color: var(--ground);
+}
+
+.btn--primary:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--text) 88%, var(--ground));
+}
+
+.btn--quiet {
+	background: var(--raised);
+	color: var(--text);
+}
+
+.btn--quiet:hover:not(:disabled) {
+	background: var(--control);
+}
+
+.btn--text {
+	color: var(--muted);
+	padding: 0 8px;
+}
+
+.btn--text:hover:not(:disabled) {
+	color: var(--text);
+}
+
+.btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* An icon-only button: 28px square, no fill until hovered. */
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-chip);
+	color: var(--muted);
+	transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.icon-btn:hover {
+	background: var(--raised);
+	color: var(--text);
+}
+
+.icon-btn[aria-pressed='true'] {
+	color: var(--text);
+	background: var(--raised);
+}
+
+/* A selection that follows the style's move: a 1px accent line
+   exactly as wide as the label, on the nearest existing edge. */
+.tab {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	height: 100%;
+	padding: 0 2px;
+	margin-right: 18px;
+	font-size: var(--fs-body);
+	font-weight: 500;
+	color: var(--muted);
+	white-space: nowrap;
+	transition: color 0.12s ease;
+}
+
+.tab:hover {
+	color: var(--text);
+}
+
+.tab[aria-selected='true'] {
+	color: var(--text);
+}
+
+.tab[aria-selected='true']::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 1px;
+	background: var(--accent);
+}
+
+/* A small chip of monospace text — file names, runtime names. */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 7px;
+	border-radius: var(--radius-chip);
+	background: var(--raised);
+	color: var(--muted);
+	font-family: var(--font-code);
+	font-size: var(--fs-micro);
+	white-space: nowrap;
+}
+
+/* A key cap, used for the run shortcut. */
+.kbd {
+	display: inline-block;
+	padding: 1px 5px;
+	border-radius: 3px;
+	background: var(--raised);
+	color: var(--muted);
+	font-family: var(--font-code);
+	font-size: var(--fs-micro);
+	line-height: 1.5;
+}
+
+/* ---- Panels ---------------------------------------------- */
+
+.panel {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+}
+
+.panel-head {
+	display: flex;
+	align-items: center;
+	gap: var(--gap);
+	height: var(--head-h);
+	flex: none;
+	padding: 0 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+	font-size: var(--fs-section);
+	font-weight: 600;
+	color: var(--text);
+	white-space: nowrap;
+}
+
+.panel-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+}
+
+.panel-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+/* ---- Form fields ----------------------------------------- */
+
+.field-label {
+	display: block;
+	font-size: var(--fs-body);
+	font-weight: 500;
+	color: var(--text);
+}
+
+.field-hint {
+	display: block;
+	font-size: var(--fs-small);
+	color: var(--muted);
+	line-height: 1.45;
+}
+
+.input {
+	width: 100%;
+	height: 38px;
+	padding: 0 11px;
+	background: var(--raised);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-card);
+	color: var(--text);
+	font-size: var(--fs-body);
+	transition: border-color 0.12s ease;
+}
+
+.input::placeholder {
+	color: var(--faint);
+}
+
+.input:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+select.input {
+	appearance: none;
+	padding-right: 30px;
+	cursor: pointer;
+}
+
+/* A select with its own chevron, so the arrow follows the theme. */
+.select-wrap {
+	position: relative;
+	display: inline-flex;
+	max-width: 340px;
+	width: 100%;
+}
+
+.select-wrap select.input {
+	width: 100%;
+}
+
+.select-wrap svg {
+	position: absolute;
+	right: 10px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: var(--muted);
+	pointer-events: none;
+}
+
+textarea.input {
+	height: auto;
+	padding: 10px 11px;
+	resize: none;
+	font-family: var(--font-code);
+	font-size: var(--fs-small);
+	line-height: 1.6;
+}
+
+/* A switch: 30x18, a semantic colour when on, not the accent. */
+.switch {
+	position: relative;
+	width: 30px;
+	height: 18px;
+	border-radius: 999px;
+	background: var(--control);
+	transition: background-color 0.15s ease;
+	flex: none;
+}
+
+.switch::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--ground);
+	transition: transform 0.15s ease;
+}
+
+.switch[aria-checked='true'] {
+	background: var(--positive);
+}
+
+.switch[aria-checked='true']::after {
+	transform: translateX(12px);
+}
+
+/* A segmented track of options. */
+.segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	background: var(--raised);
+	border-radius: var(--radius-control);
+}
+
+.segmented button {
+	min-width: 38px;
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 999px;
+	font-size: var(--fs-small);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.segmented button:hover {
+	color: var(--text);
+}
+
+.segmented button[aria-pressed='true'] {
+	background: var(--ground);
+	color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
+}

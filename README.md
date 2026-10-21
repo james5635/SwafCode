@@ -5,10 +5,13 @@ A web-based code execution playground supporting multiple programming languages.
 ## Features
 
 - **6 Languages Supported**: TypeScript, Python, Java, C++, Rust, Go
-- **Real-time Execution**: Run code with 10s timeout
+- **Real-time Execution**: Run code with 10s timeout, stop it early
 - **Syntax Highlighting**: CodeMirror 6 with language-specific highlighting
-- **Language Dropdown**: Auto-populated from backend
-- **Output/Error Panels**: Separate tabs for stdout and stderr
+- **Language Tabs**: Populated from the backend, with the runtime shown on hover
+- **Example Programs**: the same program in all six languages, one click away
+- **Console**: stdout and stderr in one panel, with a standard-input tab
+- **AI Agent**: reads, rewrites and runs the program in the editor
+- **7 Editor Themes**: each theme re-skins the whole interface
 
 ## Tech Stack
 
@@ -30,8 +33,15 @@ SwafCode/
 │           ├── code-execution.controller.ts
 │           └── dto/execute-code.dto.ts
 ├── frontend/                # SvelteKit app
+│   ├── static/fonts/        # Self-hosted Public Sans + JetBrains Mono
 │   └── src/
-│       ├── lib/components/CodeEditor.svelte
+│       ├── app.css          # Design tokens, theme palettes, shared controls
+│       ├── lib/components/
+│       │   ├── CodeEditor.svelte
+│       │   ├── ConsolePanel.svelte
+│       │   ├── AiChat.svelte
+│       │   ├── SettingsDialog.svelte
+│       │   └── Icon.svelte
 │       └── routes/+page.svelte
 ├── Taskfile.yml             # Task runner commands
 └── README.md
@@ -161,10 +171,14 @@ task clean               # Remove build artifacts
 
 ### Frontend State
 
-- Language list fetched from `/execute/languages` on load
-- Selected language stored in `$state`
+- Language list fetched from `/execute/languages` on load, with a built-in fallback
+- Selected language stored in `$state`; one program kept per language in `localStorage`
 - Code bound bidirectionally to CodeMirror via `bind:code`
-- Output/Error tabs with badge indicator for errors
+- The editor never opens on an empty program: it falls back to the language's example
+- The `Example` action in the editor header restores that program (it asks first if the program was edited)
+- Console shows stdout and stderr together, with standard input on its own tab
+- Editor preferences (theme, font size, line numbers) live in the general-settings store
+- The interface is one ground divided by 1px rules; every selection is a 1px accent line
 
 ## License
 

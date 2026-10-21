@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();
@@ -9,19 +10,3 @@
 </svelte:head>
 
 {@render children()}
-
-<style>
-	:global(*) {
-		margin: 0;
-		padding: 0;
-		box-sizing: border-box;
-	}
-
-	:global(body) {
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-		background: var(--bg-primary, #0d1117);
-		color: var(--text-primary, #c9d1d9);
-		height: 100vh;
-		overflow: hidden;
-	}
-</style>

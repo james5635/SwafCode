@@ -4,12 +4,15 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<link rel="stylesheet" href="/fonts/fonts.css" />
+		<link rel="preload" href="/fonts/public-sans-400.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin />
 		<script>
-			// Apply saved theme before first paint to avoid a flash
+			// Apply the saved theme before first paint to avoid a flash
 			try {
 				const saved = JSON.parse(localStorage.getItem('swafcode:general-settings') || '{}');
-				const id = saved.theme || 'default';
-				document.documentElement.dataset.theme = id;
+				const theme = saved.theme === 'default' ? 'swaf' : saved.theme || 'swaf';
+				document.documentElement.dataset.theme = theme;
 			} catch (e) {}
 		</script>
 		%sveltekit.head%
