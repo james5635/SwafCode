@@ -25,6 +25,12 @@
       "skillPath": "skills/extract-design-system/SKILL.md",
       "computedHash": "5f231fda377e304b202848f09ecc0fd42839355e76f60e06c3ceb7a643c15500"
     },
+    "find-docs": {
+      "source": "upstash/context7",
+      "sourceType": "github",
+      "skillPath": "skills/find-docs/SKILL.md",
+      "computedHash": "e4a9a707d8e5d575d166a175f2fec66e0a13de46597f7dbc910c735ccf01bb93"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
