@@ -18,7 +18,7 @@ A web-based code execution playground supporting multiple programming languages.
 - **Format**: prettier, black, clang-format, rustfmt and gofmt, when they are installed
 - **Share Links**: a link carries the program, so it can be sent to someone else
 - **Console**: stdout and stderr in one panel, with a standard-input tab
-- **AI Agent**: reads, rewrites and runs the program in the editor
+- **AI Agent**: reads, rewrites and runs the program in the editor (sign in to use it)
 - **7 Editor Themes**: each theme re-skins the whole interface
 
 ## Tech Stack

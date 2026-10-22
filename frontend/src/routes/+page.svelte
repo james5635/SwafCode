@@ -619,7 +619,7 @@ func main() {
 			</button>
 			<button
 				class="icon-btn"
-				title="AI agent"
+				title={signedIn ? 'AI agent' : 'AI agent — sign in to use it'}
 				aria-label="AI agent"
 				aria-pressed={railOpen}
 				onclick={() => (railOpen = !railOpen)}
@@ -763,8 +763,10 @@ func main() {
 				{getOutput}
 				runCode={runAndGetOutput}
 				streaming={streamEdits}
+				{signedIn}
 				onClose={() => (railOpen = false)}
 				onOpenSettings={() => (settingsOpen = true)}
+				onSignIn={() => (signInOpen = true)}
 			/>
 		</aside>
 	</div>

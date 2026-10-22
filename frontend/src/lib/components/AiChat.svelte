@@ -25,16 +25,20 @@
 		getOutput = () => '',
 		runCode = async () => '',
 		streaming = true,
+		signedIn = false,
 		onClose = () => {},
-		onOpenSettings = () => {}
+		onOpenSettings = () => {},
+		onSignIn = () => {}
 	}: {
 		code: string;
 		language: string;
 		getOutput?: () => string;
 		runCode?: () => Promise<string>;
 		streaming?: boolean;
+		signedIn?: boolean;
 		onClose?: () => void;
 		onOpenSettings?: () => void;
+		onSignIn?: () => void;
 	} = $props();
 
 	let messages = $state<Message[]>([]);
@@ -266,6 +270,11 @@
 		const prompt = (text ?? input).trim();
 		if (!prompt || loading) return;
 
+		if (!signedIn) {
+			onSignIn();
+			return;
+		}
+
 		const settings = $aiSettings;
 		if (!settings.apiKey) {
 			messages = [
@@ -360,6 +369,13 @@
 			send();
 		}
 	}
+
+	// The conversation belongs to the account. Signing out clears it.
+	$effect(() => {
+		if (signedIn || messages.length === 0) return;
+		messages = [];
+		streamingContent = '';
+	});
 </script>
 
 <div class="agent">
@@ -381,7 +397,24 @@
 	</div>
 
 	<div class="transcript" bind:this={chatContainer}>
-		{#if messages.length === 0}
+		{#if !signedIn}
+			<div class="empty">
+				<p class="empty-title">Sign in to use the agent</p>
+				<p class="empty-note">
+					The agent works with your account, so your programs and its edits stay yours.
+				</p>
+				<button class="btn btn--quiet" onclick={onSignIn}>Sign in</button>
+
+				<div class="capabilities">
+					<p class="cap-title">What it can do</p>
+					<ul>
+						<li>Read the program in the editor</li>
+						<li>Rewrite or extend it</li>
+						<li>Run it and read the result</li>
+					</ul>
+				</div>
+			</div>
+		{:else if messages.length === 0}
 			<div class="empty">
 				{#if !$aiSettings.apiKey}
 					<p class="empty-title">The agent needs an API key</p>
@@ -446,23 +479,25 @@
 		{/if}
 	</div>
 
-	<div class="composer">
-		<textarea
-			bind:value={input}
-			onkeydown={onKeydown}
-			placeholder="Ask the agent…"
-			rows="2"
-			aria-label="Message the agent"
-		></textarea>
-		{#if loading}
-			<button class="btn btn--quiet stop" onclick={stop}>
-				<Icon name="stop" size={14} />
-				Stop
-			</button>
-		{:else}
-			<button class="btn btn--quiet" onclick={() => send()} disabled={!input.trim()}>Send</button>
-		{/if}
-	</div>
+	{#if signedIn}
+		<div class="composer">
+			<textarea
+				bind:value={input}
+				onkeydown={onKeydown}
+				placeholder="Ask the agent…"
+				rows="2"
+				aria-label="Message the agent"
+			></textarea>
+			{#if loading}
+				<button class="btn btn--quiet stop" onclick={stop}>
+					<Icon name="stop" size={14} />
+					Stop
+				</button>
+			{:else}
+				<button class="btn btn--quiet" onclick={() => send()} disabled={!input.trim()}>Send</button>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>

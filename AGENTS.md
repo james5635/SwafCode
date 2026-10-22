@@ -133,6 +133,10 @@ request so it can stop the run.
 - The vite dev server proxies `/execute`, `/format` and `/auth` to the backend
 - The account lives in the `auth` store; `authFetch` attaches the access
   token, and refreshes it once when the server says the token is too old
+- **The AI agent needs an account.** The agent panel has three states:
+  signed out (a sign-in prompt, no composer), signed in without an API key
+  (a prompt to open the settings), and ready (the suggestions). Signing out
+  clears the conversation, because it belonged to the account
 
 ### Design rules
 
